@@ -7,6 +7,9 @@
     [],
     [],
     [],
+    [],
+    [],
+    [],
     []
   ],
   "ledger": {
@@ -49,7 +52,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u64": 2
+                  "u64": 3
                 }
               }
             },
@@ -65,7 +68,6 @@
             "key": {
               "vec": [
                 {
-
                   "symbol": "Snapshots"
                 }
               ]
@@ -110,7 +112,6 @@
                             },
                             "val": {
                               "bytes": "1111111111111111"
-                              "bytes": "1111111111111111111111111111111111111111111111111111111111111111"
                             }
                           },
                           {
@@ -143,7 +144,40 @@
                               "symbol": "hash"
                             },
                             "val": {
-
+                              "bytes": "2222222222222222"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "timestamp"
+                            },
+                            "val": {
+                              "u64": 0
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "u64": 3
+                      },
+                      "val": {
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "epoch"
+                            },
+                            "val": {
+                              "u64": 3
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "hash"
+                            },
+                            "val": {
+                              "bytes": "3333333333333333"
                             }
                           },
                           {
@@ -244,7 +278,6 @@
               "vec": [
                 {
                   "bytes": "1111111111111111"
-                  "bytes": "1111111111111111111111111111111111111111111111111111111111111111"
                 },
                 {
                   "u64": 1
@@ -271,7 +304,7 @@
             "data": {
               "vec": [
                 {
-
+                  "bytes": "1111111111111111"
                 },
                 {
                   "u64": 1
@@ -330,7 +363,7 @@
             "data": {
               "vec": [
                 {
-
+                  "bytes": "2222222222222222"
                 },
                 {
                   "u64": 2
@@ -357,7 +390,7 @@
             "data": {
               "vec": [
                 {
-
+                  "bytes": "2222222222222222"
                 },
                 {
                   "u64": 2
@@ -410,11 +443,48 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "get_snapshot"
+                "symbol": "submit_snapshot"
               }
             ],
             "data": {
-              "u64": 1
+              "vec": [
+                {
+                  "bytes": "3333333333333333"
+                },
+                {
+                  "u64": 3
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "SNAP_SUB"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "bytes": "3333333333333333"
+                },
+                {
+                  "u64": 3
+                },
+                {
+                  "u64": 0
+                }
+              ]
             }
           }
         }
@@ -433,37 +503,11 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "get_snapshot"
+                "symbol": "submit_snapshot"
               }
             ],
             "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "epoch"
-                  },
-                  "val": {
-                    "u64": 1
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "hash"
-                  },
-                  "val": {
-                    "bytes": "1111111111111111"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "timestamp"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
-                }
-              ]
-
+              "u64": 0
             }
           }
         }
@@ -485,11 +529,11 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "get_snapshot"
+                "symbol": "verify_snapshot"
               }
             ],
             "data": {
-              "u64": 2
+              "bytes": "1111111111111111"
             }
           }
         }
@@ -508,38 +552,158 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "get_snapshot"
+                "symbol": "verify_snapshot"
               }
             ],
             "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "epoch"
-                  },
-                  "val": {
-                    "u64": 2
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "hash"
-                  },
-                  "val": {
-                    "bytes": "2222222222222222"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "timestamp"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
-                }
-              ]
-              "bytes": "2222222222222222222222222222222222222222222222222222222222222222"
-
+              "bool": true
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "verify_snapshot"
+              }
+            ],
+            "data": {
+              "bytes": "2222222222222222"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "verify_snapshot"
+              }
+            ],
+            "data": {
+              "bool": true
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "verify_snapshot"
+              }
+            ],
+            "data": {
+              "bytes": "3333333333333333"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "verify_snapshot"
+              }
+            ],
+            "data": {
+              "bool": true
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "verify_snapshot"
+              }
+            ],
+            "data": {
+              "bytes": "deadbeefdeadbeef"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "verify_snapshot"
+              }
+            ],
+            "data": {
+              "bool": false
             }
           }
         }

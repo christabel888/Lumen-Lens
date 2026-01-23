@@ -7,6 +7,9 @@
     [],
     [],
     [],
+    [],
+    [],
+    [],
     []
   ],
   "ledger": {
@@ -65,7 +68,6 @@
             "key": {
               "vec": [
                 {
-
                   "symbol": "Snapshots"
                 }
               ]
@@ -110,7 +112,6 @@
                             },
                             "val": {
                               "bytes": "1111111111111111"
-                              "bytes": "1111111111111111111111111111111111111111111111111111111111111111"
                             }
                           },
                           {
@@ -143,7 +144,7 @@
                               "symbol": "hash"
                             },
                             "val": {
-
+                              "bytes": "2222222222222222"
                             }
                           },
                           {
@@ -244,7 +245,6 @@
               "vec": [
                 {
                   "bytes": "1111111111111111"
-                  "bytes": "1111111111111111111111111111111111111111111111111111111111111111"
                 },
                 {
                   "u64": 1
@@ -271,7 +271,7 @@
             "data": {
               "vec": [
                 {
-
+                  "bytes": "1111111111111111"
                 },
                 {
                   "u64": 1
@@ -330,7 +330,7 @@
             "data": {
               "vec": [
                 {
-
+                  "bytes": "2222222222222222"
                 },
                 {
                   "u64": 2
@@ -357,7 +357,7 @@
             "data": {
               "vec": [
                 {
-
+                  "bytes": "2222222222222222"
                 },
                 {
                   "u64": 2
@@ -410,11 +410,18 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "get_snapshot"
+                "symbol": "verify_snapshot_at_epoch"
               }
             ],
             "data": {
-              "u64": 1
+              "vec": [
+                {
+                  "bytes": "1111111111111111"
+                },
+                {
+                  "u64": 1
+                }
+              ]
             }
           }
         }
@@ -433,37 +440,11 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "get_snapshot"
+                "symbol": "verify_snapshot_at_epoch"
               }
             ],
             "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "epoch"
-                  },
-                  "val": {
-                    "u64": 1
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "hash"
-                  },
-                  "val": {
-                    "bytes": "1111111111111111"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "timestamp"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
-                }
-              ]
-
+              "bool": true
             }
           }
         }
@@ -485,11 +466,18 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "get_snapshot"
+                "symbol": "verify_snapshot_at_epoch"
               }
             ],
             "data": {
-              "u64": 2
+              "vec": [
+                {
+                  "bytes": "1111111111111111"
+                },
+                {
+                  "u64": 2
+                }
+              ]
             }
           }
         }
@@ -508,38 +496,179 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "get_snapshot"
+                "symbol": "verify_snapshot_at_epoch"
               }
             ],
             "data": {
-              "map": [
+              "bool": false
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "verify_snapshot_at_epoch"
+              }
+            ],
+            "data": {
+              "vec": [
                 {
-                  "key": {
-                    "symbol": "epoch"
-                  },
-                  "val": {
-                    "u64": 2
-                  }
+                  "bytes": "2222222222222222"
                 },
                 {
-                  "key": {
-                    "symbol": "hash"
-                  },
-                  "val": {
-                    "bytes": "2222222222222222"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "timestamp"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
+                  "u64": 1
                 }
               ]
-              "bytes": "2222222222222222222222222222222222222222222222222222222222222222"
-
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "verify_snapshot_at_epoch"
+              }
+            ],
+            "data": {
+              "bool": false
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "verify_snapshot_at_epoch"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "bytes": "2222222222222222"
+                },
+                {
+                  "u64": 2
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "verify_snapshot_at_epoch"
+              }
+            ],
+            "data": {
+              "bool": true
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "verify_snapshot_at_epoch"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "bytes": "1111111111111111"
+                },
+                {
+                  "u64": 999
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "verify_snapshot_at_epoch"
+              }
+            ],
+            "data": {
+              "bool": false
             }
           }
         }
