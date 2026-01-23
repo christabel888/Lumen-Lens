@@ -5,8 +5,6 @@
   },
   "auth": [
     [],
-    [],
-    [],
     []
   ],
   "ledger": {
@@ -26,46 +24,6 @@
             "key": {
               "vec": [
                 {
-                  "symbol": "LatestEpoch"
-                }
-              ]
-            },
-            "durability": "persistent"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-                "key": {
-                  "vec": [
-                    {
-                      "symbol": "LatestEpoch"
-                    }
-                  ]
-                },
-                "durability": "persistent",
-                "val": {
-                  "u64": 2
-                }
-              }
-            },
-            "ext": "v0"
-          },
-          4095
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-            "key": {
-              "vec": [
-                {
-
                   "symbol": "Snapshots"
                 }
               ]
@@ -109,41 +67,7 @@
                               "symbol": "hash"
                             },
                             "val": {
-                              "bytes": "1111111111111111"
-                              "bytes": "1111111111111111111111111111111111111111111111111111111111111111"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "timestamp"
-                            },
-                            "val": {
-                              "u64": 0
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "u64": 2
-                      },
-                      "val": {
-                        "map": [
-                          {
-                            "key": {
-                              "symbol": "epoch"
-                            },
-                            "val": {
-                              "u64": 2
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "hash"
-                            },
-                            "val": {
-
+                              "bytes": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
                             }
                           },
                           {
@@ -243,8 +167,7 @@
             "data": {
               "vec": [
                 {
-                  "bytes": "1111111111111111"
-                  "bytes": "1111111111111111111111111111111111111111111111111111111111111111"
+                  "bytes": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
                 },
                 {
                   "u64": 1
@@ -271,7 +194,7 @@
             "data": {
               "vec": [
                 {
-
+                  "bytes": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
                 },
                 {
                   "u64": 1
@@ -330,10 +253,10 @@
             "data": {
               "vec": [
                 {
-
+                  "bytes": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
                 },
                 {
-                  "u64": 2
+                  "u64": 1
                 }
               ]
             }
@@ -346,31 +269,31 @@
       "event": {
         "ext": "v0",
         "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "contract",
+        "type_": "diagnostic",
         "body": {
           "v0": {
             "topics": [
               {
-                "symbol": "SNAP_SUB"
+                "symbol": "log"
               }
             ],
             "data": {
               "vec": [
                 {
-
+                  "string": "caught panic 'Snapshot for epoch 1 already exists' from contract function 'Symbol(obj#31)'"
                 },
                 {
-                  "u64": 2
+                  "bytes": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
                 },
                 {
-                  "u64": 0
+                  "u64": 1
                 }
               ]
             }
           }
         }
       },
-      "failed_call": false
+      "failed_call": true
     },
     {
       "event": {
@@ -381,14 +304,58 @@
           "v0": {
             "topics": [
               {
-                "symbol": "fn_return"
+                "symbol": "error"
               },
               {
-                "symbol": "submit_snapshot"
+                "error": {
+                  "wasm_vm": "invalid_action"
+                }
               }
             ],
             "data": {
-              "u64": 0
+              "string": "caught error from function"
+            }
+          }
+        }
+      },
+      "failed_call": true
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "error"
+              },
+              {
+                "error": {
+                  "wasm_vm": "invalid_action"
+                }
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "string": "contract call failed"
+                },
+                {
+                  "symbol": "submit_snapshot"
+                },
+                {
+                  "vec": [
+                    {
+                      "bytes": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+                    },
+                    {
+                      "u64": 1
+                    }
+                  ]
+                }
+              ]
             }
           }
         }
@@ -404,142 +371,16 @@
           "v0": {
             "topics": [
               {
-                "symbol": "fn_call"
+                "symbol": "error"
               },
               {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_snapshot"
-              }
-            ],
-            "data": {
-              "u64": 1
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_snapshot"
-              }
-            ],
-            "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "epoch"
-                  },
-                  "val": {
-                    "u64": 1
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "hash"
-                  },
-                  "val": {
-                    "bytes": "1111111111111111"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "timestamp"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
+                "error": {
+                  "wasm_vm": "invalid_action"
                 }
-              ]
-
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_snapshot"
               }
             ],
             "data": {
-              "u64": 2
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_snapshot"
-              }
-            ],
-            "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "epoch"
-                  },
-                  "val": {
-                    "u64": 2
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "hash"
-                  },
-                  "val": {
-                    "bytes": "2222222222222222"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "timestamp"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
-                }
-              ]
-              "bytes": "2222222222222222222222222222222222222222222222222222222222222222"
-
+              "string": "escalating error to panic"
             }
           }
         }

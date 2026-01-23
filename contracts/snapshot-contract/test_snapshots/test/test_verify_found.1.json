@@ -4,6 +4,7 @@
     "nonce": 0
   },
   "auth": [
+    [],
     []
   ],
   "ledger": {
@@ -23,46 +24,6 @@
             "key": {
               "vec": [
                 {
-                  "symbol": "LatestEpoch"
-                }
-              ]
-            },
-            "durability": "persistent"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-                "key": {
-                  "vec": [
-                    {
-                      "symbol": "LatestEpoch"
-                    }
-                  ]
-                },
-                "durability": "persistent",
-                "val": {
-                  "u64": 100
-                }
-              }
-            },
-            "ext": "v0"
-          },
-          4095
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-            "key": {
-              "vec": [
-                {
-
                   "symbol": "Snapshots"
                 }
               ]
@@ -106,7 +67,6 @@
                               "symbol": "hash"
                             },
                             "val": {
-                              "bytes": "abcdef1234567890"
                               "bytes": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
                             }
                           },
@@ -207,7 +167,6 @@
             "data": {
               "vec": [
                 {
-                  "bytes": "abcdef1234567890"
                   "bytes": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
                 },
                 {
@@ -235,7 +194,6 @@
             "data": {
               "vec": [
                 {
-                  "bytes": "abcdef1234567890"
                   "bytes": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
                 },
                 {
@@ -268,6 +226,55 @@
             ],
             "data": {
               "u64": 0
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "verify_snapshot"
+              }
+            ],
+            "data": {
+              "bytes": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "verify_snapshot"
+              }
+            ],
+            "data": {
+              "bool": true
             }
           }
         }
