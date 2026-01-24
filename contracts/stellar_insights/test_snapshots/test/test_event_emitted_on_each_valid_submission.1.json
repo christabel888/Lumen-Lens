@@ -15,35 +15,10 @@
               "function_name": "submit_snapshot",
               "args": [
                 {
-                  "u64": 100
+                  "u64": 1
                 },
                 {
-                  "bytes": "0000006400000000000000000000000000000000000000000000000000000000"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "submit_snapshot",
-              "args": [
-                {
-                  "u64": 50
-                },
-                {
-                  "bytes": "0000003200000000000000000000000000000000000000000000000000000000"
+                  "bytes": "0000045700000000000000000000000000000000000000000000000000000000"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -65,10 +40,10 @@
               "function_name": "submit_snapshot",
               "args": [
                 {
-                  "u64": 200
+                  "u64": 2
                 },
                 {
-                  "bytes": "000000c800000000000000000000000000000000000000000000000000000000"
+                  "bytes": "000008ae00000000000000000000000000000000000000000000000000000000"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -80,10 +55,31 @@
         }
       ]
     ],
-    [],
-    [],
-    [],
-    []
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "submit_snapshot",
+              "args": [
+                {
+                  "u64": 3
+                },
+                {
+                  "bytes": "00000d0500000000000000000000000000000000000000000000000000000000"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ]
   ],
   "ledger": {
     "protocol_version": 21,
@@ -128,7 +124,7 @@
                   "map": [
                     {
                       "key": {
-                        "u64": 50
+                        "u64": 1
                       },
                       "val": {
                         "map": [
@@ -137,7 +133,7 @@
                               "symbol": "epoch"
                             },
                             "val": {
-                              "u64": 50
+                              "u64": 1
                             }
                           },
                           {
@@ -145,7 +141,7 @@
                               "symbol": "hash"
                             },
                             "val": {
-                              "bytes": "0000003200000000000000000000000000000000000000000000000000000000"
+                              "bytes": "0000045700000000000000000000000000000000000000000000000000000000"
                             }
                           },
                           {
@@ -161,7 +157,7 @@
                     },
                     {
                       "key": {
-                        "u64": 100
+                        "u64": 2
                       },
                       "val": {
                         "map": [
@@ -170,7 +166,7 @@
                               "symbol": "epoch"
                             },
                             "val": {
-                              "u64": 100
+                              "u64": 2
                             }
                           },
                           {
@@ -178,7 +174,7 @@
                               "symbol": "hash"
                             },
                             "val": {
-                              "bytes": "0000006400000000000000000000000000000000000000000000000000000000"
+                              "bytes": "000008ae00000000000000000000000000000000000000000000000000000000"
                             }
                           },
                           {
@@ -194,7 +190,7 @@
                     },
                     {
                       "key": {
-                        "u64": 200
+                        "u64": 3
                       },
                       "val": {
                         "map": [
@@ -203,7 +199,7 @@
                               "symbol": "epoch"
                             },
                             "val": {
-                              "u64": 200
+                              "u64": 3
                             }
                           },
                           {
@@ -211,7 +207,7 @@
                               "symbol": "hash"
                             },
                             "val": {
-                              "bytes": "000000c800000000000000000000000000000000000000000000000000000000"
+                              "bytes": "00000d0500000000000000000000000000000000000000000000000000000000"
                             }
                           },
                           {
@@ -278,7 +274,7 @@
                           ]
                         },
                         "val": {
-                          "u64": 200
+                          "u64": 3
                         }
                       }
                     ]
@@ -482,10 +478,10 @@
             "data": {
               "vec": [
                 {
-                  "u64": 100
+                  "u64": 1
                 },
                 {
-                  "bytes": "0000006400000000000000000000000000000000000000000000000000000000"
+                  "bytes": "0000045700000000000000000000000000000000000000000000000000000000"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -519,7 +515,7 @@
                     "symbol": "epoch"
                   },
                   "val": {
-                    "u64": 100
+                    "u64": 1
                   }
                 },
                 {
@@ -527,7 +523,7 @@
                     "symbol": "hash"
                   },
                   "val": {
-                    "bytes": "0000006400000000000000000000000000000000000000000000000000000000"
+                    "bytes": "0000045700000000000000000000000000000000000000000000000000000000"
                   }
                 },
                 {
@@ -597,10 +593,10 @@
             "data": {
               "vec": [
                 {
-                  "u64": 50
+                  "u64": 2
                 },
                 {
-                  "bytes": "0000003200000000000000000000000000000000000000000000000000000000"
+                  "bytes": "000008ae00000000000000000000000000000000000000000000000000000000"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -634,7 +630,7 @@
                     "symbol": "epoch"
                   },
                   "val": {
-                    "u64": 50
+                    "u64": 2
                   }
                 },
                 {
@@ -642,7 +638,7 @@
                     "symbol": "hash"
                   },
                   "val": {
-                    "bytes": "0000003200000000000000000000000000000000000000000000000000000000"
+                    "bytes": "000008ae00000000000000000000000000000000000000000000000000000000"
                   }
                 },
                 {
@@ -712,10 +708,10 @@
             "data": {
               "vec": [
                 {
-                  "u64": 200
+                  "u64": 3
                 },
                 {
-                  "bytes": "000000c800000000000000000000000000000000000000000000000000000000"
+                  "bytes": "00000d0500000000000000000000000000000000000000000000000000000000"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -749,7 +745,7 @@
                     "symbol": "epoch"
                   },
                   "val": {
-                    "u64": 200
+                    "u64": 3
                   }
                 },
                 {
@@ -757,7 +753,7 @@
                     "symbol": "hash"
                   },
                   "val": {
-                    "bytes": "000000c800000000000000000000000000000000000000000000000000000000"
+                    "bytes": "00000d0500000000000000000000000000000000000000000000000000000000"
                   }
                 },
                 {
@@ -800,200 +796,6 @@
             ],
             "data": {
               "u64": 0
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_latest_epoch"
-              }
-            ],
-            "data": "void"
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_latest_epoch"
-              }
-            ],
-            "data": {
-              "u64": 200
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_snapshot"
-              }
-            ],
-            "data": {
-              "u64": 100
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_snapshot"
-              }
-            ],
-            "data": {
-              "bytes": "0000006400000000000000000000000000000000000000000000000000000000"
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_snapshot"
-              }
-            ],
-            "data": {
-              "u64": 50
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_snapshot"
-              }
-            ],
-            "data": {
-              "bytes": "0000003200000000000000000000000000000000000000000000000000000000"
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_snapshot"
-              }
-            ],
-            "data": {
-              "u64": 200
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_snapshot"
-              }
-            ],
-            "data": {
-              "bytes": "000000c800000000000000000000000000000000000000000000000000000000"
             }
           }
         }

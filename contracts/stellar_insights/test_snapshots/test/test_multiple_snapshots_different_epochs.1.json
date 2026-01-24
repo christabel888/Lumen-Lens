@@ -507,6 +507,9 @@
             "topics": [
               {
                 "symbol": "SNAP_SUB"
+              },
+              {
+                "symbol": "SNAP_LFE"
               }
             ],
             "data": {
@@ -525,6 +528,14 @@
                   },
                   "val": {
                     "bytes": "0000045700000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "submitter"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                   }
                 },
                 {
@@ -611,6 +622,9 @@
             "topics": [
               {
                 "symbol": "SNAP_SUB"
+              },
+              {
+                "symbol": "SNAP_LFE"
               }
             ],
             "data": {
@@ -629,6 +643,14 @@
                   },
                   "val": {
                     "bytes": "000008ae00000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "submitter"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                   }
                 },
                 {
@@ -715,6 +737,9 @@
             "topics": [
               {
                 "symbol": "SNAP_SUB"
+              },
+              {
+                "symbol": "SNAP_LFE"
               }
             ],
             "data": {
@@ -733,6 +758,14 @@
                   },
                   "val": {
                     "bytes": "00000d0500000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "submitter"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                   }
                 },
                 {
