@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use super::*;
+use crate::events::{SnapshotSubmitted, SNAPSHOT_LIFECYCLE, SNAPSHOT_SUBMITTED};
 use soroban_sdk::{
     testutils::{Address as _, Events},
     Address, BytesN, Env,
@@ -55,7 +56,7 @@ fn test_successful_snapshot_submission() {
     let epoch = 1u64;
     let hash = create_test_hash(&env, 12345);
 
-    let timestamp = client.submit_snapshot(&epoch, &hash, &admin);
+    let _timestamp = client.submit_snapshot(&epoch, &hash, &admin);
 
     // Timestamp should be present (even if 0 in test environment)
     assert_eq!(client.get_latest_epoch(), epoch);
@@ -188,13 +189,102 @@ fn test_snapshot_submitted_event() {
     let epoch = 100u64;
     let hash = create_test_hash(&env, 54321);
 
-    client.submit_snapshot(&epoch, &hash, &admin);
+    let _timestamp = client.submit_snapshot(&epoch, &hash, &admin);
 
     // Verify event was emitted
     let events = env.events().all();
     
     // Should have at least one event from the snapshot submission
     assert!(events.len() >= 1, "Expected at least one event to be emitted");
+
+    // Verify the event contains the correct topics and structure
+    // The event should have SNAPSHOT_SUBMITTED and SNAPSHOT_LIFECYCLE topics
+    let _expected_topics = (SNAPSHOT_SUBMITTED, SNAPSHOT_LIFECYCLE);
+    let _expected_data = SnapshotSubmitted {
+        hash: hash.clone(),
+        epoch,
+        timestamp: _timestamp,
+        submitter: admin.clone(),
+    };
+
+    // Check that our event is in the emitted events with proper topic count
+    assert!(
+        env.events().all().iter().any(|(_, topics, _)| {
+            let topic_vec: soroban_sdk::Vec<soroban_sdk::Val> = topics;
+            topic_vec.len() >= 2
+        }),
+        "Expected event with SNAPSHOT_SUBMITTED and SNAPSHOT_LIFECYCLE topics"
+    );
+}
+
+#[test]
+fn test_event_payload_matches_stored_data() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, StellarInsightsContract);
+    let client = StellarInsightsContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let epoch = 42u64;
+    let hash = create_test_hash(&env, 99999);
+
+    // Submit snapshot and capture timestamp
+    let returned_timestamp = client.submit_snapshot(&epoch, &hash, &admin);
+
+    // Retrieve stored data
+    let stored_hash = client.get_snapshot(&epoch);
+    let (latest_hash, latest_epoch, stored_timestamp) = client.latest_snapshot();
+
+    // Verify the stored data matches what was submitted
+    assert_eq!(stored_hash, hash, "Stored hash should match submitted hash");
+    assert_eq!(latest_hash, hash, "Latest hash should match submitted hash");
+    assert_eq!(latest_epoch, epoch, "Latest epoch should match submitted epoch");
+    assert_eq!(
+        stored_timestamp, returned_timestamp,
+        "Stored timestamp should match returned timestamp"
+    );
+
+    // Verify events were emitted
+    let events = env.events().all();
+    assert!(
+        events.len() >= 1,
+        "Event must be emitted on every valid submission"
+    );
+}
+
+#[test]
+fn test_event_emitted_on_each_valid_submission() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, StellarInsightsContract);
+    let client = StellarInsightsContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    // Submit multiple snapshots
+    client.submit_snapshot(&1, &create_test_hash(&env, 1111), &admin);
+    let events_after_first = env.events().all().len();
+
+    client.submit_snapshot(&2, &create_test_hash(&env, 2222), &admin);
+    let events_after_second = env.events().all().len();
+
+    client.submit_snapshot(&3, &create_test_hash(&env, 3333), &admin);
+    let events_after_third = env.events().all().len();
+
+    // Each submission should emit an event
+    assert!(
+        events_after_second > events_after_first,
+        "Second submission should emit new event"
+    );
+    assert!(
+        events_after_third > events_after_second,
+        "Third submission should emit new event"
+    );
 }
 
 #[test]

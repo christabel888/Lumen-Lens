@@ -15,10 +15,10 @@
               "function_name": "submit_snapshot",
               "args": [
                 {
-                  "u64": 10
+                  "u64": 42
                 },
                 {
-                  "bytes": "0000045700000000000000000000000000000000000000000000000000000000"
+                  "bytes": "0001869f00000000000000000000000000000000000000000000000000000000"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -30,6 +30,7 @@
         }
       ]
     ],
+    [],
     []
   ],
   "ledger": {
@@ -75,7 +76,7 @@
                   "map": [
                     {
                       "key": {
-                        "u64": 10
+                        "u64": 42
                       },
                       "val": {
                         "map": [
@@ -84,7 +85,7 @@
                               "symbol": "epoch"
                             },
                             "val": {
-                              "u64": 10
+                              "u64": 42
                             }
                           },
                           {
@@ -92,7 +93,7 @@
                               "symbol": "hash"
                             },
                             "val": {
-                              "bytes": "0000045700000000000000000000000000000000000000000000000000000000"
+                              "bytes": "0001869f00000000000000000000000000000000000000000000000000000000"
                             }
                           },
                           {
@@ -159,7 +160,7 @@
                           ]
                         },
                         "val": {
-                          "u64": 10
+                          "u64": 42
                         }
                       }
                     ]
@@ -297,10 +298,10 @@
             "data": {
               "vec": [
                 {
-                  "u64": 10
+                  "u64": 42
                 },
                 {
-                  "bytes": "0000045700000000000000000000000000000000000000000000000000000000"
+                  "bytes": "0001869f00000000000000000000000000000000000000000000000000000000"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
@@ -334,7 +335,7 @@
                     "symbol": "epoch"
                   },
                   "val": {
-                    "u64": 10
+                    "u64": 42
                   }
                 },
                 {
@@ -342,7 +343,7 @@
                     "symbol": "hash"
                   },
                   "val": {
-                    "bytes": "0000045700000000000000000000000000000000000000000000000000000000"
+                    "bytes": "0001869f00000000000000000000000000000000000000000000000000000000"
                   }
                 },
                 {
@@ -406,21 +407,11 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "submit_snapshot"
+                "symbol": "get_snapshot"
               }
             ],
             "data": {
-              "vec": [
-                {
-                  "u64": 10
-                },
-                {
-                  "bytes": "000008ae00000000000000000000000000000000000000000000000000000000"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                }
-              ]
+              "u64": 42
             }
           }
         }
@@ -439,43 +430,16 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "submit_snapshot"
+                "symbol": "get_snapshot"
               }
             ],
             "data": {
-              "error": {
-                "contract": 2
-              }
+              "bytes": "0001869f00000000000000000000000000000000000000000000000000000000"
             }
           }
         }
       },
-      "failed_call": true
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "error"
-              },
-              {
-                "error": {
-                  "contract": 2
-                }
-              }
-            ],
-            "data": {
-              "string": "escalating Ok(ScErrorType::Contract) frame-exit to Err"
-            }
-          }
-        }
-      },
-      "failed_call": true
+      "failed_call": false
     },
     {
       "event": {
@@ -486,34 +450,46 @@
           "v0": {
             "topics": [
               {
-                "symbol": "error"
+                "symbol": "fn_call"
               },
               {
-                "error": {
-                  "contract": 2
-                }
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "latest_snapshot"
+              }
+            ],
+            "data": "void"
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "latest_snapshot"
               }
             ],
             "data": {
               "vec": [
                 {
-                  "string": "contract try_call failed"
+                  "bytes": "0001869f00000000000000000000000000000000000000000000000000000000"
                 },
                 {
-                  "symbol": "submit_snapshot"
+                  "u64": 42
                 },
                 {
-                  "vec": [
-                    {
-                      "u64": 10
-                    },
-                    {
-                      "bytes": "000008ae00000000000000000000000000000000000000000000000000000000"
-                    },
-                    {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                    }
-                  ]
+                  "u64": 0
                 }
               ]
             }

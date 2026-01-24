@@ -4,7 +4,7 @@ mod errors;
 mod events;
 
 use errors::Error;
-use events::AnalyticsSnapshotSubmitted;
+use events::emit_snapshot_submitted;
 use soroban_sdk::{
     contract, contractimpl, contracttype, Address, BytesN, Env, Map,
 };
@@ -144,8 +144,13 @@ impl StellarInsightsContract {
             env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
         }
 
-        // Emit event for off-chain verification
-        AnalyticsSnapshotSubmitted::publish(&env, epoch, hash, timestamp);
+        // Emit structured event for off-chain indexing
+        // Event payload matches stored data exactly:
+        // - hash: same as snapshot.hash
+        // - epoch: same as snapshot.epoch  
+        // - timestamp: same as snapshot.timestamp
+        // - submitter: the authenticated caller
+        emit_snapshot_submitted(&env, hash, epoch, timestamp, caller);
 
         Ok(timestamp)
     }
