@@ -27,12 +27,12 @@ impl AnalyticsContract {
     /// Sets up empty snapshot history and initializes latest epoch to 0
     pub fn initialize(env: Env) {
         let storage = env.storage().instance();
-        
+
         // Initialize latest epoch to 0 if not already set
         if !storage.has(&DataKey::LatestEpoch) {
             storage.set(&DataKey::LatestEpoch, &0u64);
         }
-        
+
         // Initialize empty snapshots map if not already set
         let persistent_storage = env.storage().persistent();
         if !persistent_storage.has(&DataKey::Snapshots) {
@@ -43,16 +43,16 @@ impl AnalyticsContract {
 
     /// Submit a new snapshot for a specific epoch
     /// Stores the snapshot in the historical map and updates latest epoch if newer
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Contract environment
     /// * `epoch` - Epoch identifier (must be positive and unique)
     /// * `hash` - 32-byte hash of the analytics snapshot
-    /// 
+    ///
     /// # Panics
     /// * If epoch is 0 (invalid)
     /// * If snapshot already exists for this epoch
-    /// 
+    ///
     /// # Returns
     /// * Ledger timestamp when snapshot was recorded
     pub fn submit_snapshot(env: Env, epoch: u64, hash: BytesN<32>) -> u64 {
@@ -62,7 +62,7 @@ impl AnalyticsContract {
         }
 
         let timestamp = env.ledger().timestamp();
-        
+
         // Create snapshot metadata
         let metadata = SnapshotMetadata {
             epoch,
@@ -84,7 +84,9 @@ impl AnalyticsContract {
 
         // Store snapshot in history
         snapshots.set(epoch, metadata);
-        env.storage().persistent().set(&DataKey::Snapshots, &snapshots);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshots, &snapshots);
 
         // Update latest epoch if this is newer
         let current_latest: u64 = env
@@ -101,11 +103,11 @@ impl AnalyticsContract {
     }
 
     /// Get snapshot metadata for a specific epoch
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Contract environment
     /// * `epoch` - Epoch to retrieve
-    /// 
+    ///
     /// # Returns
     /// * Snapshot metadata for the epoch, or None if not found
     pub fn get_snapshot(env: Env, epoch: u64) -> Option<SnapshotMetadata> {
@@ -119,10 +121,10 @@ impl AnalyticsContract {
     }
 
     /// Get the latest snapshot metadata
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Contract environment
-    /// 
+    ///
     /// # Returns
     /// * Latest snapshot metadata, or None if no snapshots exist
     pub fn get_latest_snapshot(env: Env) -> Option<SnapshotMetadata> {
@@ -140,10 +142,10 @@ impl AnalyticsContract {
     }
 
     /// Get the complete snapshot history as a Map
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Contract environment
-    /// 
+    ///
     /// # Returns
     /// * Map of all snapshots keyed by epoch
     pub fn get_snapshot_history(env: Env) -> Map<u64, SnapshotMetadata> {
@@ -154,10 +156,10 @@ impl AnalyticsContract {
     }
 
     /// Get the latest epoch number
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Contract environment
-    /// 
+    ///
     /// # Returns
     /// * Latest epoch number (0 if no snapshots)
     pub fn get_latest_epoch(env: Env) -> u64 {
@@ -168,20 +170,20 @@ impl AnalyticsContract {
     }
 
     /// Get all epochs that have snapshots (for iteration purposes)
-    /// 
+    ///
     /// # Arguments
     /// * `env` - Contract environment
-    /// 
+    ///
     /// # Returns
     /// * Vector of all epochs with stored snapshots
     pub fn get_all_epochs(env: Env) -> soroban_sdk::Vec<u64> {
         let snapshots = Self::get_snapshot_history(env.clone());
         let mut epochs = soroban_sdk::Vec::new(&env);
-        
+
         for (epoch, _) in snapshots.iter() {
             epochs.push_back(epoch);
         }
-        
+
         epochs
     }
 }
@@ -189,7 +191,7 @@ impl AnalyticsContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Ledger, Env};
+    use soroban_sdk::Env;
 
     #[test]
     fn test_initialization() {
@@ -216,18 +218,18 @@ mod test {
 
         let epoch = 1u64;
         let hash = BytesN::from_array(&env, &[1u8; 32]);
-        
+
         let timestamp = client.submit_snapshot(&epoch, &hash);
-        
+
         // Verify snapshot was stored
         let snapshot = client.get_snapshot(&epoch).unwrap();
         assert_eq!(snapshot.epoch, epoch);
         assert_eq!(snapshot.hash, hash);
         assert_eq!(snapshot.timestamp, timestamp);
-        
+
         // Verify latest epoch updated
         assert_eq!(client.get_latest_epoch(), epoch);
-        
+
         // Verify latest snapshot
         let latest = client.get_latest_snapshot().unwrap();
         assert_eq!(latest.epoch, epoch);
@@ -270,7 +272,7 @@ mod test {
 
         // Verify latest epoch is the highest
         assert_eq!(client.get_latest_epoch(), epoch2);
-        
+
         // Verify latest snapshot is from highest epoch
         let latest = client.get_latest_snapshot().unwrap();
         assert_eq!(latest.epoch, epoch2);
@@ -279,7 +281,7 @@ mod test {
         // Verify history contains all snapshots
         let history = client.get_snapshot_history();
         assert_eq!(history.len(), 3);
-        
+
         // Verify all epochs are accessible
         let all_epochs = client.get_all_epochs();
         assert_eq!(all_epochs.len(), 3);
@@ -400,7 +402,7 @@ mod test {
 
         // Latest epoch should not change
         assert_eq!(client.get_latest_epoch(), epoch_new);
-        
+
         // But both snapshots should be accessible
         assert!(client.get_snapshot(&epoch_new).is_some());
         assert!(client.get_snapshot(&epoch_old).is_some());
@@ -416,13 +418,13 @@ mod test {
 
         // Submit non-sequential epochs
         let epochs = [1u64, 5u64, 3u64, 10u64, 7u64];
-        let mut hashes = Vec::new();
+        let mut hashes = soroban_sdk::Vec::new(&env);
 
         for (i, &epoch) in epochs.iter().enumerate() {
             let mut hash_bytes = [0u8; 32];
             hash_bytes[0] = (i + 1) as u8;
             let hash = BytesN::from_array(&env, &hash_bytes);
-            hashes.push(hash.clone());
+            hashes.push_back(hash.clone());
             client.submit_snapshot(&epoch, &hash);
         }
 
@@ -430,7 +432,7 @@ mod test {
         for (i, &epoch) in epochs.iter().enumerate() {
             let snapshot = client.get_snapshot(&epoch).unwrap();
             assert_eq!(snapshot.epoch, epoch);
-            assert_eq!(snapshot.hash, hashes[i]);
+            assert_eq!(snapshot.hash, hashes.get(i as u32).unwrap());
         }
 
         // Verify latest epoch is the maximum
@@ -438,7 +440,7 @@ mod test {
 
         // Verify history integrity
         let history = client.get_snapshot_history();
-        assert_eq!(history.len(), epochs.len());
+        assert_eq!(history.len(), epochs.len() as u32);
     }
 
     #[test]
