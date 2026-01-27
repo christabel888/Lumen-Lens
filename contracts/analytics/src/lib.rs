@@ -413,26 +413,28 @@ mod test {
 
         client.initialize();
 
-        let epochs = [1u64, 5u64, 10u64];
+        // Submit non-sequential epochs
+        let epochs = [1u64, 5u64, 3u64, 10u64, 7u64];
+        let mut hashes = soroban_sdk::Vec::new(&env);
+
         for (i, &epoch) in epochs.iter().enumerate() {
             let mut hash_bytes = [0u8; 32];
             hash_bytes[0] = (i + 1) as u8;
             let hash = BytesN::from_array(&env, &hash_bytes);
+            hashes.push_back(hash.clone());
             client.submit_snapshot(&epoch, &hash);
         }
 
         for (i, &epoch) in epochs.iter().enumerate() {
             let snapshot = client.get_snapshot(&epoch).unwrap();
             assert_eq!(snapshot.epoch, epoch);
-            let mut expected = [0u8; 32];
-            expected[0] = (i + 1) as u8;
-            assert_eq!(snapshot.hash, BytesN::from_array(&env, &expected));
+            assert_eq!(snapshot.hash, hashes.get(i as u32).unwrap());
         }
 
         assert_eq!(client.get_latest_epoch(), 10u64);
 
         let history = client.get_snapshot_history();
-        assert_eq!(history.len(), 3);
+        assert_eq!(history.len(), epochs.len() as u32);
     }
 
     #[test]
