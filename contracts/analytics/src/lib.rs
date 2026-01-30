@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, BytesN, Env, Map};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Map};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -12,6 +12,8 @@ pub struct SnapshotMetadata {
 
 #[contracttype]
 pub enum DataKey {
+    /// Authorized submitter address (only this address can submit snapshots)
+    Admin,
     /// Map of epoch -> snapshot metadata (persistent storage for full history)
     Snapshots,
     /// Latest epoch number (instance storage for quick access)
@@ -23,22 +25,33 @@ pub struct AnalyticsContract;
 
 #[contractimpl]
 impl AnalyticsContract {
-    /// Initialize contract storage
+    /// Initialize contract storage with an authorized admin address
     /// Sets up empty snapshot history and initializes latest epoch to 0
-    pub fn initialize(env: Env) {
+    ///
+    /// # Arguments
+    /// * `env` - Contract environment
+    /// * `admin` - Address authorized to submit snapshots
+    ///
+    /// # Panics
+    /// * If contract is already initialized (admin already set)
+    pub fn initialize(env: Env, admin: Address) {
         let storage = env.storage().instance();
 
-        // Initialize latest epoch to 0 if not already set
-        if !storage.has(&DataKey::LatestEpoch) {
-            storage.set(&DataKey::LatestEpoch, &0u64);
+        // Prevent re-initialization if admin is already set
+        if storage.has(&DataKey::Admin) {
+            panic!("Contract already initialized");
         }
 
-        // Initialize empty snapshots map if not already set
+        // Store the authorized admin address
+        storage.set(&DataKey::Admin, &admin);
+
+        // Initialize latest epoch to 0
+        storage.set(&DataKey::LatestEpoch, &0u64);
+
+        // Initialize empty snapshots map
         let persistent_storage = env.storage().persistent();
-        if !persistent_storage.has(&DataKey::Snapshots) {
-            let empty_snapshots = Map::<u64, SnapshotMetadata>::new(&env);
-            persistent_storage.set(&DataKey::Snapshots, &empty_snapshots);
-        }
+        let empty_snapshots = Map::<u64, SnapshotMetadata>::new(&env);
+        persistent_storage.set(&DataKey::Snapshots, &empty_snapshots);
     }
 
     /// Submit a new snapshot for a specific epoch.
@@ -49,14 +62,31 @@ impl AnalyticsContract {
     /// * `env` - Contract environment
     /// * `epoch` - Epoch identifier (must be positive and strictly greater than latest)
     /// * `hash` - 32-byte hash of the analytics snapshot
+    /// * `caller` - Address attempting to submit (must be the authorized admin)
     ///
     /// # Panics
+    /// * If admin is not set (contract not initialized)
+    /// * If caller is not the authorized admin
     /// * If epoch is 0 (invalid)
     /// * If epoch <= latest (monotonicity violated: out-of-order or duplicate)
     ///
     /// # Returns
     /// * Ledger timestamp when snapshot was recorded
-    pub fn submit_snapshot(env: Env, epoch: u64, hash: BytesN<32>) -> u64 {
+    pub fn submit_snapshot(env: Env, epoch: u64, hash: BytesN<32>, caller: Address) -> u64 {
+        // Require authentication from the caller
+        caller.require_auth();
+
+        // Verify caller is the authorized admin
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized: admin not set");
+
+        if caller != admin {
+            panic!("Unauthorized: only the admin can submit snapshots");
+        }
+
         if epoch == 0 {
             panic!("Invalid epoch: must be greater than 0");
         }
@@ -183,6 +213,47 @@ impl AnalyticsContract {
         }
 
         epochs
+    }
+
+    /// Get the current authorized admin address
+    ///
+    /// # Arguments
+    /// * `env` - Contract environment
+    ///
+    /// # Returns
+    /// * The admin address if set, None otherwise
+    pub fn get_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::Admin)
+    }
+
+    /// Update the authorized admin address
+    /// Only the current admin can transfer admin rights to a new address
+    ///
+    /// # Arguments
+    /// * `env` - Contract environment
+    /// * `current_admin` - Current admin address (must authenticate)
+    /// * `new_admin` - New address to set as admin
+    ///
+    /// # Panics
+    /// * If contract is not initialized (admin not set)
+    /// * If caller is not the current admin
+    pub fn set_admin(env: Env, current_admin: Address, new_admin: Address) {
+        // Require authentication from the current admin
+        current_admin.require_auth();
+
+        // Verify caller is the current admin
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized: admin not set");
+
+        if current_admin != admin {
+            panic!("Unauthorized: only the current admin can set a new admin");
+        }
+
+        // Update admin address
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
     }
 }
 
