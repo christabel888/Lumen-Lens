@@ -1,104 +1,37 @@
-# Snapshot Contract
+# Snapshot Contract - Multi-Admin & Role-Based Permissions
 
-On-chain analytics snapshot verification for Stellar Insights using Soroban smart contracts.
+## Overview
+This contract supports multiple admin addresses and role-based permissions for secure and flexible management.
 
 ## Features
+- **Multiple Admins:**
+  - Initialize with one or more admin addresses.
+  - Add or remove admins (cannot remove last admin).
+- **Role-Based Permissions:**
+  - Admins can perform privileged actions (upgrade, migrate, add/remove admins).
+  - Role checks are extensible for future roles and permissions.
 
-✅ **Snapshot Submission** - Submit 32-byte SHA-256 hashes with epoch identifiers  
-✅ **Input Validation** - Enforces hash size and epoch requirements  
-✅ **Event Emission** - Publishes `SNAP_SUB` event for each submission  
-✅ **Duplicate Prevention** - Immutable snapshots per epoch  
-✅ **Snapshot Retrieval** - Query by epoch or get latest  
-✅ **Hash Verification** - Verify integrity of stored snapshots  
+## Key Methods
+- `initialize(admins: Vec<Address>)`: Initialize contract with multiple admins.
+- `get_admins() -> Vec<Address>`: Get all current admin addresses.
+- `add_admin(caller: Address, new_admin: Address)`: Add a new admin (caller must be admin).
+- `remove_admin(caller: Address, admin_to_remove: Address)`: Remove an admin (caller must be admin, cannot remove last admin).
+- `is_admin(env: Env, addr: Address) -> bool`: Check if address is an admin.
+- `check_permission(env: Env, addr: Address, function: &str) -> bool`: Check if address has permission for a function (currently, admin = all permissions).
 
-## Quick Start
+## Usage
+- Only admins can upgrade, migrate, or manage admin addresses.
+- All admin changes are logged as contract events.
 
-```bash
-# Build contract
-cargo build --target wasm32-unknown-unknown --release
+## Extending Permissions
+- Integrate with the `access-control` contract for more granular roles and permissions.
 
-# Run tests
-cargo test --lib
+## Events
+- `INIT`: Contract initialized with admins.
+- `ADM_ADD`: Admin added.
+- `ADM_REM`: Admin removed.
+- `UPGRADED`: Contract upgraded.
+- `MIGRATED`: Migration performed.
 
-# Deploy to testnet
-soroban contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/snapshot_contract.wasm \
-  --source ACCOUNT_SECRET_KEY \
-  --rpc-url https://soroban-testnet.stellar.org:443 \
-  --network-passphrase "Test SDF Network ; September 2015"
-```
-
-## Contract Interface
-
-### `submit_snapshot(hash: Bytes, epoch: u64) -> u64`
-Submit analytics snapshot hash.
-
-**Requirements:**
-- Hash must be exactly 32 bytes (SHA-256)
-- Epoch must be greater than 0
-- Epoch must not already exist
-
-**Returns:** Ledger timestamp  
-**Event:** `SNAP_SUB(hash, epoch, timestamp)`
-
-### `get_snapshot(epoch: u64) -> Bytes`
-Retrieve snapshot hash for specific epoch.
-
-### `latest_snapshot() -> (Bytes, u64, u64)`
-Get most recent snapshot data.
-
-**Returns:** `(hash, epoch, timestamp)`
-
-### `verify_snapshot(hash: Bytes) -> bool`
-Check if hash exists in stored snapshots.
-
-## Testing
-
-All 9 tests pass:
-- ✅ Submit and retrieve snapshots
-- ✅ Event emission verification
-- ✅ Invalid hash size rejection
-- ✅ Invalid epoch rejection  
-- ✅ Duplicate epoch prevention
-- ✅ Multiple snapshots handling
-- ✅ Latest snapshot retrieval
-- ✅ Hash verification (positive/negative)
-
-```bash
-cargo test --lib
-```
-
-## Integration Example
-
-```rust
-use sha2::{Sha256, Digest};
-use soroban_sdk::Bytes;
-
-// Generate snapshot hash
-let mut hasher = Sha256::new();
-hasher.update(analytics_data.as_bytes());
-let hash: [u8; 32] = hasher.finalize().into();
-
-// Submit to contract
-let timestamp = client.submit_snapshot(
-    &Bytes::from_array(&env, &hash),
-    &epoch_number
-);
-```
-
-## Security
-
-- **Hash Validation**: Only SHA-256 (32 bytes) accepted
-- **Epoch Validation**: No zero epochs allowed
-- **Immutability**: Snapshots cannot be overwritten
-- **Persistent Storage**: Long-term data retention
-
-## Documentation
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for comprehensive deployment and integration guide.
-
-## Built With
-
-- Soroban SDK v21.7.7
-- Rust (no_std)
-- WASM target: 9.1K optimized
+---
+For more details, see the source code and tests.

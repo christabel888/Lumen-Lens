@@ -1,5 +1,8 @@
 use super::*;
-use soroban_sdk::{testutils::{Address as _, Ledger}, Address, BytesN, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, BytesN, Env,
+};
 
 fn create_test_hash(env: &Env, value: u8) -> BytesN<32> {
     BytesN::from_array(env, &[value; 32])
@@ -9,7 +12,7 @@ fn create_test_hash(env: &Env, value: u8) -> BytesN<32> {
 fn test_initialization() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -27,7 +30,7 @@ fn test_initialization() {
 fn test_initialize_cannot_reinitialize() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -41,7 +44,7 @@ fn test_initialize_cannot_reinitialize() {
 fn test_submit_single_snapshot() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -74,7 +77,7 @@ fn test_submit_single_snapshot() {
 fn test_multiple_snapshots_strictly_increasing_epochs() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -117,7 +120,7 @@ fn test_multiple_snapshots_strictly_increasing_epochs() {
 fn test_non_sequential_epochs_monotonic_order() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -144,7 +147,7 @@ fn test_non_sequential_epochs_monotonic_order() {
 fn test_historical_data_integrity_after_new_submissions() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -184,7 +187,7 @@ fn test_historical_data_integrity_after_new_submissions() {
 fn test_get_nonexistent_snapshot() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -199,7 +202,7 @@ fn test_get_nonexistent_snapshot() {
 fn test_invalid_epoch_zero() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -215,7 +218,7 @@ fn test_invalid_epoch_zero() {
 fn test_duplicate_epoch_fails() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -235,7 +238,7 @@ fn test_duplicate_epoch_fails() {
 fn test_older_epoch_rejected() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -256,7 +259,7 @@ fn test_older_epoch_rejected() {
 fn test_bounded_storage_growth_simulation() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
@@ -287,10 +290,10 @@ fn test_bounded_storage_growth_simulation() {
 fn test_unauthorized_submission_fails() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
-    
+
     let admin = Address::generate(&env);
     let unauthorized_user = Address::generate(&env);
 
@@ -298,7 +301,7 @@ fn test_unauthorized_submission_fails() {
 
     let epoch = 1u64;
     let hash = create_test_hash(&env, 1);
-    
+
     // Attempt to submit snapshot with unauthorized address should fail
     client.submit_snapshot(&epoch, &hash, &unauthorized_user);
 }
@@ -307,25 +310,25 @@ fn test_unauthorized_submission_fails() {
 fn test_authorized_submission_succeeds() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
-    
+
     let admin = Address::generate(&env);
 
     client.initialize(&admin);
-    
+
     env.ledger().set_timestamp(1000);
 
     let epoch = 1u64;
     let hash = create_test_hash(&env, 1);
-    
+
     // Authorized admin should be able to submit
     let timestamp = client.submit_snapshot(&epoch, &hash, &admin);
-    
+
     assert_eq!(timestamp, 1000);
     assert_eq!(client.get_latest_epoch(), epoch);
-    
+
     let snapshot = client.get_snapshot(&epoch).unwrap();
     assert_eq!(snapshot.hash, hash);
 }
@@ -334,16 +337,16 @@ fn test_authorized_submission_succeeds() {
 fn test_get_admin() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
-    
+
     // Before initialization, admin should be None
     assert_eq!(client.get_admin(), None);
-    
+
     let admin = Address::generate(&env);
     client.initialize(&admin);
-    
+
     // After initialization, admin should match
     assert_eq!(client.get_admin(), Some(admin));
 }
@@ -352,25 +355,25 @@ fn test_get_admin() {
 fn test_set_admin_by_authorized_admin() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
-    
+
     let admin = Address::generate(&env);
     let new_admin = Address::generate(&env);
 
     client.initialize(&admin);
     assert_eq!(client.get_admin(), Some(admin.clone()));
-    
+
     // Current admin transfers rights to new admin
     client.set_admin(&admin, &new_admin);
     assert_eq!(client.get_admin(), Some(new_admin.clone()));
-    
+
     // New admin can now submit snapshots
     let epoch = 1u64;
     let hash = create_test_hash(&env, 1);
     client.submit_snapshot(&epoch, &hash, &new_admin);
-    
+
     assert_eq!(client.get_latest_epoch(), epoch);
 }
 
@@ -379,16 +382,16 @@ fn test_set_admin_by_authorized_admin() {
 fn test_set_admin_by_unauthorized_user_fails() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
-    
+
     let admin = Address::generate(&env);
     let unauthorized_user = Address::generate(&env);
     let new_admin = Address::generate(&env);
 
     client.initialize(&admin);
-    
+
     // Unauthorized user attempts to change admin should fail
     client.set_admin(&unauthorized_user, &new_admin);
 }
@@ -398,18 +401,18 @@ fn test_set_admin_by_unauthorized_user_fails() {
 fn test_old_admin_cannot_submit_after_transfer() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, AnalyticsContract);
     let client = AnalyticsContractClient::new(&env, &contract_id);
-    
+
     let admin = Address::generate(&env);
     let new_admin = Address::generate(&env);
 
     client.initialize(&admin);
-    
+
     // Transfer admin rights
     client.set_admin(&admin, &new_admin);
-    
+
     // Old admin should no longer be able to submit
     let epoch = 1u64;
     let hash = create_test_hash(&env, 1);
