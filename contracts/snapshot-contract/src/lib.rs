@@ -15,6 +15,10 @@ pub struct Snapshot {
 pub enum DataKey {
     Snapshots,
     LatestEpoch,
+    /// Administrator address authorized to pause/unpause
+    Admin,
+    /// Emergency pause state (true = paused, false = active)
+    Paused,
 }
 
 #[contract]
@@ -22,6 +26,23 @@ pub struct SnapshotContract;
 
 #[contractimpl]
 impl SnapshotContract {
+    /// Initialize the contract with an admin address
+    ///
+    /// # Arguments
+    /// * `env` - Contract environment
+    /// * `admin` - Address that will be authorized to pause/unpause
+    ///
+    /// # Panics
+    /// * If contract is already initialized
+    pub fn initialize(env: Env, admin: Address) {
+        if env.storage().instance().has(&DataKey::Admin) {
+            panic!("Contract already initialized");
+        }
+
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
+    }
+
     /// Submit a snapshot hash for an epoch with input validation
     ///
     /// # Arguments
@@ -29,6 +50,7 @@ impl SnapshotContract {
     /// * `epoch` - Epoch identifier (must be positive)
     ///
     /// # Panics
+    /// * If contract is paused for emergency maintenance
     /// * If hash is not exactly 32 bytes
     /// * If epoch is 0
     /// * If snapshot already exists for this epoch
@@ -36,6 +58,12 @@ impl SnapshotContract {
     /// # Returns
     /// * Ledger timestamp when snapshot was recorded
     pub fn submit_snapshot(env: Env, hash: Bytes, epoch: u64) -> u64 {
+        // Check if contract is paused
+        let is_paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        if is_paused {
+            panic!("Contract is paused for emergency maintenance");
+        }
+
         // Validate inputs
         if hash.len() != HASH_SIZE {
             panic!(
@@ -182,6 +210,83 @@ impl SnapshotContract {
             Some(snapshot) => snapshot.hash == hash,
             None => false,
         }
+    }
+
+    /// Emergency pause the contract
+    ///
+    /// Pauses all snapshot submissions. Only the admin can pause the contract.
+    /// Read operations remain available during pause.
+    ///
+    /// # Arguments
+    /// * `env` - Contract environment
+    /// * `caller` - Address attempting to pause (must be admin)
+    ///
+    /// # Panics
+    /// * If admin is not set (contract not initialized)
+    /// * If caller is not the admin
+    pub fn pause(env: Env, caller: Address) {
+        caller.require_auth();
+
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized: admin not set");
+
+        if caller != admin {
+            panic!("Unauthorized: only the admin can pause the contract");
+        }
+
+        env.storage().instance().set(&DataKey::Paused, &true);
+    }
+
+    /// Unpause the contract
+    ///
+    /// Resumes normal operations. Only the admin can unpause the contract.
+    ///
+    /// # Arguments
+    /// * `env` - Contract environment
+    /// * `caller` - Address attempting to unpause (must be admin)
+    ///
+    /// # Panics
+    /// * If admin is not set (contract not initialized)
+    /// * If caller is not the admin
+    pub fn unpause(env: Env, caller: Address) {
+        caller.require_auth();
+
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized: admin not set");
+
+        if caller != admin {
+            panic!("Unauthorized: only the admin can unpause the contract");
+        }
+
+        env.storage().instance().set(&DataKey::Paused, &false);
+    }
+
+    /// Check if contract is paused
+    ///
+    /// # Arguments
+    /// * `env` - Contract environment
+    ///
+    /// # Returns
+    /// * `true` if contract is paused, `false` otherwise
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    /// Get the current admin address
+    ///
+    /// # Arguments
+    /// * `env` - Contract environment
+    ///
+    /// # Returns
+    /// * The admin address if set, None otherwise
+    pub fn get_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::Admin)
     }
 }
 
