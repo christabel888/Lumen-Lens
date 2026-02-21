@@ -28,6 +28,7 @@ pub enum DataKey {
     LatestEpoch,
     Metadata,
     Admin,
+    Stopped,
 }
 
 #[contract]
@@ -35,6 +36,41 @@ pub struct SnapshotContract;
 
 #[contractimpl]
 impl SnapshotContract {
+    /// Internal: check if contract is stopped
+    fn require_not_stopped(env: &Env) {
+        if env
+            .storage()
+            .instance()
+            .get::<DataKey, bool>(&DataKey::Stopped)
+            .unwrap_or(false)
+        {
+            panic!("Contract is stopped: emergency halt active");
+        }
+    }
+
+    /// Admin-only: stop contract operations
+    pub fn stop_contract(env: Env) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized");
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Stopped, &true);
+        env.events().publish((symbol_short!("STOPPED"),), (admin,));
+    }
+
+    /// Admin-only: resume contract operations
+    pub fn resume_contract(env: Env) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized");
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Stopped, &false);
+        env.events().publish((symbol_short!("RESUMED"),), (admin,));
+    }
     /// Initialize the contract with an admin address
     ///
     /// # Arguments
@@ -57,6 +93,7 @@ impl SnapshotContract {
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Metadata, &metadata);
+        env.storage().instance().set(&DataKey::Stopped, &false);
 
         env.events()
             .publish((symbol_short!("INIT"),), (admin, CONTRACT_VERSION));
@@ -64,6 +101,7 @@ impl SnapshotContract {
 
     /// Get the current contract version
     pub fn version(env: Env) -> u32 {
+        Self::require_not_stopped(&env);
         let metadata: Option<ContractMetadata> = env.storage().instance().get(&DataKey::Metadata);
         match metadata {
             Some(m) => m.version,
@@ -73,6 +111,7 @@ impl SnapshotContract {
 
     /// Get the contract admin address
     pub fn get_admin(env: Env) -> Option<Address> {
+        Self::require_not_stopped(&env);
         env.storage().instance().get(&DataKey::Admin)
     }
 
@@ -84,6 +123,7 @@ impl SnapshotContract {
     /// # Panics
     /// * If caller is not the current admin
     pub fn transfer_admin(env: Env, new_admin: Address) {
+        Self::require_not_stopped(&env);
         let admin: Address = env
             .storage()
             .instance()
@@ -117,6 +157,7 @@ impl SnapshotContract {
     /// * If caller is not the admin
     /// * If hash is invalid
     pub fn prepare_upgrade(env: Env, new_wasm_hash: Bytes) {
+        Self::require_not_stopped(&env);
         let admin: Address = env
             .storage()
             .instance()
@@ -141,6 +182,7 @@ impl SnapshotContract {
     /// # Panics
     /// * If caller is not the admin
     pub fn upgrade(env: Env, new_wasm_hash: Bytes) {
+        Self::require_not_stopped(&env);
         let admin: Address = env
             .storage()
             .instance()
@@ -185,6 +227,7 @@ impl SnapshotContract {
     /// # Panics
     /// * If caller is not the admin
     pub fn migrate(env: Env, from_version: u32) {
+        Self::require_not_stopped(&env);
         let admin: Address = env
             .storage()
             .instance()
@@ -222,6 +265,7 @@ impl SnapshotContract {
     /// # Returns
     /// * Ledger timestamp when snapshot was recorded
     pub fn submit_snapshot(env: Env, hash: Bytes, epoch: u64) -> u64 {
+        Self::require_not_stopped(&env);
         // Validate inputs
         if hash.len() != HASH_SIZE {
             panic!(
@@ -277,6 +321,7 @@ impl SnapshotContract {
 
     /// Get snapshot data for a specific epoch
     pub fn get_snapshot(env: Env, epoch: u64) -> Bytes {
+        Self::require_not_stopped(&env);
         let snapshots: Map<u64, Snapshot> = env
             .storage()
             .persistent()
@@ -290,6 +335,7 @@ impl SnapshotContract {
     }
 
     pub fn latest_snapshot(env: Env) -> Option<Snapshot> {
+        Self::require_not_stopped(&env);
         let latest_epoch: Option<u64> = env.storage().persistent().get(&DataKey::LatestEpoch);
 
         match latest_epoch {
@@ -318,6 +364,7 @@ impl SnapshotContract {
     /// # Returns
     /// `true` if the hash matches any stored snapshot, `false` otherwise
     pub fn verify_snapshot(env: Env, hash: Bytes) -> bool {
+        Self::require_not_stopped(&env);
         let snapshots: Map<u64, Snapshot> = env
             .storage()
             .persistent()
@@ -343,6 +390,7 @@ impl SnapshotContract {
     /// # Returns
     /// `true` if the hash matches the snapshot at the given epoch, `false` otherwise
     pub fn verify_snapshot_at_epoch(env: Env, hash: Bytes, epoch: u64) -> bool {
+        Self::require_not_stopped(&env);
         let snapshots: Map<u64, Snapshot> = env
             .storage()
             .persistent()
@@ -363,6 +411,7 @@ impl SnapshotContract {
     /// # Returns
     /// `true` if the hash matches the latest snapshot, `false` otherwise
     pub fn verify_latest_snapshot(env: Env, hash: Bytes) -> bool {
+        Self::require_not_stopped(&env);
         match Self::latest_snapshot(env.clone()) {
             Some(snapshot) => snapshot.hash == hash,
             None => false,
