@@ -84,9 +84,7 @@ impl GovernanceContract {
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::ProposalCount, &0u64);
+        env.storage().instance().set(&DataKey::ProposalCount, &0u64);
         env.storage().instance().set(&DataKey::Quorum, &quorum);
         env.storage()
             .instance()
@@ -290,11 +288,7 @@ impl GovernanceContract {
                 total_voters: 0,
             });
 
-        let quorum: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::Quorum)
-            .unwrap_or(0);
+        let quorum: u64 = env.storage().instance().get(&DataKey::Quorum).unwrap_or(0);
 
         // Determine outcome: passes if quorum met AND more for than against
         let new_status = if tally.total_voters >= quorum && tally.votes_for > tally.votes_against {
@@ -399,11 +393,7 @@ impl GovernanceContract {
             .get(&DataKey::Admin)
             .ok_or(Error::AdminNotSet)?;
 
-        let quorum: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::Quorum)
-            .unwrap_or(0);
+        let quorum: u64 = env.storage().instance().get(&DataKey::Quorum).unwrap_or(0);
 
         let voting_period: u64 = env
             .storage()
