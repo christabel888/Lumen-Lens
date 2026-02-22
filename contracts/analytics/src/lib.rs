@@ -344,7 +344,9 @@ impl AnalyticsContract {
             panic!("Unauthorized: only the admin can set governance");
         }
 
-        env.storage().instance().set(&DataKey::Governance, &governance);
+        env.storage()
+            .instance()
+            .set(&DataKey::Governance, &governance);
     }
 
     /// Get the current governance contract address (if any).

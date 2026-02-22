@@ -451,8 +451,7 @@ impl GovernanceContract {
             .get(&DataKey::ParameterAction(proposal_id))
         {
             let governance = env.current_contract_address();
-            let client =
-                AnalyticsContractClient::new(&env, &proposal.target_contract);
+            let client = AnalyticsContractClient::new(&env, &proposal.target_contract);
             match action {
                 ParameterAction::SetAdmin(addr) => {
                     client.set_admin_by_governance(&governance, &addr);

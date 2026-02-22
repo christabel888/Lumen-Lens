@@ -286,8 +286,12 @@ fn test_create_parameter_proposal() {
     let target = Address::generate(&env);
     let new_admin = Address::generate(&env);
 
-    let proposal_id =
-        client.create_parameter_proposal(&admin, &title, &target, &ParameterAction::SetAdmin(new_admin));
+    let proposal_id = client.create_parameter_proposal(
+        &admin,
+        &title,
+        &target,
+        &ParameterAction::SetAdmin(new_admin),
+    );
     assert_eq!(proposal_id, 1);
 
     let proposal = client.get_proposal(&1);
