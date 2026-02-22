@@ -80,7 +80,11 @@ impl AnalyticsContract {
     /// * Ledger timestamp when snapshot was recorded
     pub fn submit_snapshot(env: Env, epoch: u64, hash: BytesN<32>, caller: Address) -> u64 {
         // Check if contract is paused
-        let is_paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
         if is_paused {
             panic!("Contract is paused for emergency maintenance");
         }
@@ -331,7 +335,10 @@ impl AnalyticsContract {
     /// # Returns
     /// * `true` if contract is paused, `false` otherwise
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 }
 

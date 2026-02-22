@@ -96,8 +96,7 @@ impl ProposalFinalizedEvent {
             votes_against,
             total_voters,
         };
-        env.events()
-            .publish((PROP_FINALIZED, GOV_LIFECYCLE), event);
+        env.events().publish((PROP_FINALIZED, GOV_LIFECYCLE), event);
     }
 }
 
@@ -127,5 +126,12 @@ pub fn emit_proposal_finalized(
     votes_against: u64,
     total_voters: u64,
 ) {
-    ProposalFinalizedEvent::publish(env, proposal_id, status, votes_for, votes_against, total_voters);
+    ProposalFinalizedEvent::publish(
+        env,
+        proposal_id,
+        status,
+        votes_for,
+        votes_against,
+        total_voters,
+    );
 }

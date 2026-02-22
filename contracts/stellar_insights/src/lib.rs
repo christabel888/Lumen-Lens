@@ -90,7 +90,11 @@ impl StellarInsightsContract {
         caller: Address,
     ) -> Result<u64, Error> {
         // Check if contract is paused
-        let is_paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
         if is_paused {
             return Err(Error::ContractPaused);
         }
@@ -317,7 +321,10 @@ impl StellarInsightsContract {
     /// # Returns
     /// * `true` if contract is paused, `false` otherwise
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 }
 

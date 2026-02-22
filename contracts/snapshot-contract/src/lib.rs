@@ -126,7 +126,6 @@ impl SnapshotContract {
     /// Transfer admin rights to a new address (only callable by existing admin)
     pub fn transfer_admin(env: Env, new_admin: Address) {
         Self::require_not_stopped(&env);
-        let admin: Address = env
         let current_admin: Address = env
             .storage()
             .instance()
@@ -247,7 +246,11 @@ impl SnapshotContract {
     /// * Ledger timestamp when snapshot was recorded
     pub fn submit_snapshot(env: Env, hash: Bytes, epoch: u64) -> u64 {
         // Check if contract is paused
-        let is_paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
         if is_paused {
             panic!("Contract is paused for emergency maintenance");
         }
@@ -442,7 +445,10 @@ impl SnapshotContract {
     /// # Returns
     /// * `true` if contract is paused, `false` otherwise
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 
     /// Get the current admin address
