@@ -5,6 +5,7 @@ members = [
   "stellar_insights",
   "analytics",
   "benches",
+  "access-control",
   "governance",
 ]
 
