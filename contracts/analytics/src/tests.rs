@@ -1,7 +1,7 @@
 use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, BytesN, Env,
+    Address, BytesN, Env, Vec,
 };
 
 fn create_test_hash(env: &Env, value: u8) -> BytesN<32> {
@@ -452,4 +452,101 @@ fn test_old_admin_cannot_submit_after_transfer() {
     let epoch = 1u64;
     let hash = create_test_hash(&env, 1);
     client.submit_snapshot(&epoch, &hash, &admin);
+}
+
+// ============================================================================
+// Batch Operations Tests
+// ============================================================================
+
+#[test]
+fn test_batch_submit_snapshots() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    let mut snapshots = Vec::new(&env);
+    snapshots.push_back((1u64, create_test_hash(&env, 1)));
+    snapshots.push_back((2u64, create_test_hash(&env, 2)));
+    snapshots.push_back((3u64, create_test_hash(&env, 3)));
+
+    let timestamps = client.batch_submit_snapshots(&admin, &snapshots);
+
+    assert_eq!(timestamps.len(), 3);
+    assert_eq!(client.get_latest_epoch(), 3);
+
+    assert_eq!(client.get_snapshot(&1u64).unwrap().hash, create_test_hash(&env, 1));
+    assert_eq!(client.get_snapshot(&2u64).unwrap().hash, create_test_hash(&env, 2));
+    assert_eq!(client.get_snapshot(&3u64).unwrap().hash, create_test_hash(&env, 3));
+}
+
+#[test]
+fn test_batch_get_snapshots() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    client.submit_snapshot(&1u64, &create_test_hash(&env, 1), &admin);
+    client.submit_snapshot(&2u64, &create_test_hash(&env, 2), &admin);
+    client.submit_snapshot(&3u64, &create_test_hash(&env, 3), &admin);
+
+    let mut epochs = Vec::new(&env);
+    epochs.push_back(1u64);
+    epochs.push_back(2u64);
+    epochs.push_back(99u64); // non-existent
+
+    let results = client.batch_get_snapshots(&epochs);
+
+    assert_eq!(results.len(), 3);
+    assert_eq!(results.get(0).unwrap().unwrap().hash, create_test_hash(&env, 1));
+    assert_eq!(results.get(1).unwrap().unwrap().hash, create_test_hash(&env, 2));
+    assert!(results.get(2).unwrap().is_none());
+}
+
+#[test]
+fn test_batch_operations_gas_efficiency() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(5000);
+
+    // Submit 10 snapshots in a single batch call
+    let mut snapshots = Vec::new(&env);
+    for i in 1u64..=10 {
+        snapshots.push_back((i, create_test_hash(&env, i as u8)));
+    }
+
+    let timestamps = client.batch_submit_snapshots(&admin, &snapshots);
+    assert_eq!(timestamps.len(), 10);
+    assert_eq!(client.get_latest_epoch(), 10);
+
+    // Retrieve all 10 in a single batch call
+    let mut epochs = Vec::new(&env);
+    for i in 1u64..=10 {
+        epochs.push_back(i);
+    }
+
+    let results = client.batch_get_snapshots(&epochs);
+    assert_eq!(results.len(), 10);
+
+    for i in 0u32..10 {
+        let snapshot = results.get(i).unwrap().unwrap();
+        assert_eq!(snapshot.epoch, (i + 1) as u64);
+        assert_eq!(snapshot.hash, create_test_hash(&env, (i + 1) as u8));
+    }
 }

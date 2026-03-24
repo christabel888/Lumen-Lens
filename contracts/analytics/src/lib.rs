@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Map};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, Vec};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -387,6 +387,114 @@ impl AnalyticsContract {
         }
 
         env.storage().instance().set(&DataKey::Paused, &paused);
+    }
+
+    /// Batch submit multiple snapshots in a single transaction.
+    /// Epochs must be strictly increasing within the batch and relative to the current latest.
+    ///
+    /// # Arguments
+    /// * `env` - Contract environment
+    /// * `caller` - Address attempting to submit (must be the authorized admin)
+    /// * `snapshots` - Vector of (epoch, hash) pairs to submit
+    ///
+    /// # Returns
+    /// * Vector of ledger timestamps for each submitted snapshot
+    pub fn batch_submit_snapshots(
+        env: Env,
+        caller: Address,
+        snapshots: Vec<(u64, BytesN<32>)>,
+    ) -> Vec<u64> {
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            panic!("Contract is paused for emergency maintenance");
+        }
+
+        caller.require_auth();
+
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized: admin not set");
+
+        if caller != admin {
+            panic!("Unauthorized: only the admin can submit snapshots");
+        }
+
+        let mut timestamps = Vec::new(&env);
+        let mut snapshots_map: Map<u64, SnapshotMetadata> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Snapshots)
+            .unwrap_or_else(|| Map::new(&env));
+        let mut latest: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LatestEpoch)
+            .unwrap_or(0);
+
+        for (epoch, hash) in snapshots.iter() {
+            if epoch == 0 {
+                panic!("Invalid epoch: must be greater than 0");
+            }
+            if epoch <= latest {
+                panic!("Epoch monotonicity violated: epoch must be strictly greater than latest");
+            }
+            if snapshots_map.contains_key(epoch) {
+                panic!("Snapshot immutability violated: epoch already exists in storage");
+            }
+
+            let timestamp = env.ledger().timestamp();
+            snapshots_map.set(
+                epoch,
+                SnapshotMetadata {
+                    epoch,
+                    timestamp,
+                    hash,
+                },
+            );
+            latest = epoch;
+            timestamps.push_back(timestamp);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshots, &snapshots_map);
+        env.storage().instance().set(&DataKey::LatestEpoch, &latest);
+
+        env.events()
+            .publish((symbol_short!("batch"), caller), snapshots.len());
+
+        timestamps
+    }
+
+    /// Batch get multiple snapshots by epoch in a single call.
+    ///
+    /// # Arguments
+    /// * `env` - Contract environment
+    /// * `epochs` - Vector of epoch numbers to retrieve
+    ///
+    /// # Returns
+    /// * Vector of Option<SnapshotMetadata> (None for epochs not found)
+    pub fn batch_get_snapshots(
+        env: Env,
+        epochs: Vec<u64>,
+    ) -> Vec<Option<SnapshotMetadata>> {
+        let snapshots: Map<u64, SnapshotMetadata> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Snapshots)
+            .unwrap_or_else(|| Map::new(&env));
+
+        let mut results = Vec::new(&env);
+        for epoch in epochs.iter() {
+            results.push_back(snapshots.get(epoch));
+        }
+        results
     }
 
     /// Check if contract is paused
