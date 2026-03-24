@@ -397,6 +397,41 @@ fn test_set_admin_by_unauthorized_user_fails() {
 }
 
 #[test]
+#[should_panic(expected = "Snapshot immutability violated")]
+fn test_snapshot_immutability() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    let epoch = 1u64;
+    client.submit_snapshot(&epoch, &create_test_hash(&env, 1), &admin);
+    // Attempting to overwrite an existing snapshot must panic
+    client.submit_snapshot(&epoch, &create_test_hash(&env, 2), &admin);
+}
+
+#[test]
+#[should_panic(expected = "already exists")]
+fn test_duplicate_epoch_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    let epoch = 5u64;
+    client.submit_snapshot(&epoch, &create_test_hash(&env, 5), &admin);
+    client.submit_snapshot(&epoch, &create_test_hash(&env, 6), &admin);
+}
+
+#[test]
 #[should_panic(expected = "Unauthorized")]
 fn test_old_admin_cannot_submit_after_transfer() {
     let env = Env::default();

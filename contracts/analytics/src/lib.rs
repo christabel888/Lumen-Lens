@@ -139,6 +139,11 @@ impl AnalyticsContract {
             .get(&DataKey::Snapshots)
             .unwrap_or_else(|| Map::new(&env));
 
+        // Defense-in-depth: explicitly prevent overwriting an existing snapshot
+        if snapshots.contains_key(epoch) {
+            panic!("Snapshot immutability violated: epoch {} already exists in storage", epoch);
+        }
+
         snapshots.set(epoch, metadata);
         env.storage()
             .persistent()
