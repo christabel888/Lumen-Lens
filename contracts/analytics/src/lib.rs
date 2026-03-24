@@ -3,6 +3,58 @@ use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, B
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ErrorEvent {
+    pub error_code: u32,
+    pub error_message: String,
+    pub function_name: String,
+    pub caller: Address,
+    pub timestamp: u64,
+    pub ledger_sequence: u32,
+    pub context: String,
+}
+
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ContractError {
+    ContractPaused = 1,
+    Unauthorized = 2,
+    InvalidEpoch = 3,
+    EpochAlreadyExists = 4,
+    EpochMonotonicityViolated = 5,
+    SnapshotImmutabilityViolated = 6,
+}
+
+fn emit_error_event(
+    env: &Env,
+    error: ContractError,
+    function_name: &str,
+    caller: &Address,
+    context: &str,
+) {
+    let msg = match error {
+        ContractError::ContractPaused => "Contract is paused",
+        ContractError::Unauthorized => "Unauthorized caller",
+        ContractError::InvalidEpoch => "Invalid epoch value",
+        ContractError::EpochAlreadyExists => "Epoch already exists",
+        ContractError::EpochMonotonicityViolated => "Epoch monotonicity violated",
+        ContractError::SnapshotImmutabilityViolated => "Snapshot immutability violated",
+    };
+    env.events().publish(
+        (symbol_short!("error"), caller.clone()),
+        ErrorEvent {
+            error_code: error as u32,
+            error_message: String::from_str(env, msg),
+            function_name: String::from_str(env, function_name),
+            caller: caller.clone(),
+            timestamp: env.ledger().timestamp(),
+            ledger_sequence: env.ledger().sequence(),
+            context: String::from_str(env, context),
+        },
+    );
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotMetadata {
     pub epoch: u64,
     pub timestamp: u64,
@@ -134,6 +186,13 @@ impl AnalyticsContract {
             .get(&DataKey::Paused)
             .unwrap_or(false);
         if is_paused {
+            emit_error_event(
+                &env,
+                ContractError::ContractPaused,
+                "submit_snapshot",
+                &caller,
+                "Contract is paused for emergency maintenance",
+            );
             panic!("Contract is paused for emergency maintenance");
         }
 
@@ -148,10 +207,24 @@ impl AnalyticsContract {
             .expect("Contract not initialized: admin not set");
 
         if caller != admin {
+            emit_error_event(
+                &env,
+                ContractError::Unauthorized,
+                "submit_snapshot",
+                &caller,
+                "Only the admin can submit snapshots",
+            );
             panic!("Unauthorized: only the admin can submit snapshots");
         }
 
         if epoch == 0 {
+            emit_error_event(
+                &env,
+                ContractError::InvalidEpoch,
+                "submit_snapshot",
+                &caller,
+                "Epoch must be greater than 0",
+            );
             panic!("Invalid epoch: must be greater than 0");
         }
 
@@ -163,8 +236,22 @@ impl AnalyticsContract {
 
         if epoch <= latest {
             if epoch == latest {
+                emit_error_event(
+                    &env,
+                    ContractError::EpochAlreadyExists,
+                    "submit_snapshot",
+                    &caller,
+                    "Snapshot for this epoch already exists",
+                );
                 panic!("Snapshot for epoch {} already exists", epoch);
             } else {
+                emit_error_event(
+                    &env,
+                    ContractError::EpochMonotonicityViolated,
+                    "submit_snapshot",
+                    &caller,
+                    "Epoch must be strictly greater than the latest epoch",
+                );
                 panic!(
                     "Epoch monotonicity violated: epoch {} must be strictly greater than latest {}",
                     epoch, latest
@@ -188,6 +275,13 @@ impl AnalyticsContract {
 
         // Defense-in-depth: explicitly prevent overwriting an existing snapshot
         if snapshots.contains_key(epoch) {
+            emit_error_event(
+                &env,
+                ContractError::SnapshotImmutabilityViolated,
+                "submit_snapshot",
+                &caller,
+                "Epoch already exists in storage",
+            );
             panic!("Snapshot immutability violated: epoch {} already exists in storage", epoch);
         }
 

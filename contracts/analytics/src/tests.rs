@@ -736,3 +736,105 @@ fn test_event_emission() {
     client.submit_snapshot(&epoch2, &hash2, &admin);
     assert_eq!(client.get_latest_epoch(), epoch2);
 }
+
+// ============================================================================
+// Error Event Tests
+// ============================================================================
+
+#[test]
+fn test_error_events() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    // Successful submit — verifies the happy path still works after adding error events
+    let ts = client.submit_snapshot(&1u64, &create_test_hash(&env, 1), &admin);
+    assert_eq!(ts, 1000);
+    assert_eq!(client.get_latest_epoch(), 1);
+
+    // Pause and unpause — verifies error events don't break pause/unpause flow
+    client.pause(&admin, &soroban_sdk::String::from_str(&env, "test pause"));
+    assert!(client.is_paused());
+    client.unpause(&admin, &soroban_sdk::String::from_str(&env, "test unpause"));
+    assert!(!client.is_paused());
+
+    // Submit after unpause — verifies contract is still operational
+    let ts2 = client.submit_snapshot(&2u64, &create_test_hash(&env, 2), &admin);
+    assert_eq!(ts2, 1000);
+    assert_eq!(client.get_latest_epoch(), 2);
+}
+
+#[test]
+#[should_panic(expected = "Invalid epoch")]
+fn test_error_event_invalid_epoch() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    // Triggers ContractError::InvalidEpoch error event then panics
+    client.submit_snapshot(&0u64, &create_test_hash(&env, 1), &admin);
+}
+
+#[test]
+#[should_panic(expected = "Unauthorized")]
+fn test_error_event_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let other = Address::generate(&env);
+    client.initialize(&admin);
+    // Triggers ContractError::Unauthorized error event then panics
+    client.submit_snapshot(&1u64, &create_test_hash(&env, 1), &other);
+}
+
+#[test]
+#[should_panic(expected = "Epoch monotonicity violated")]
+fn test_error_event_monotonicity_violated() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    client.submit_snapshot(&5u64, &create_test_hash(&env, 5), &admin);
+    // Triggers ContractError::EpochMonotonicityViolated error event then panics
+    client.submit_snapshot(&3u64, &create_test_hash(&env, 3), &admin);
+}
+
+#[test]
+#[should_panic(expected = "already exists")]
+fn test_error_event_epoch_already_exists() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    client.submit_snapshot(&1u64, &create_test_hash(&env, 1), &admin);
+    // Triggers ContractError::EpochAlreadyExists error event then panics
+    client.submit_snapshot(&1u64, &create_test_hash(&env, 2), &admin);
+}
+
+#[test]
+#[should_panic(expected = "Contract is paused")]
+fn test_error_event_contract_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    client.pause(&admin, &soroban_sdk::String::from_str(&env, "test"));
+    // Triggers ContractError::ContractPaused error event then panics
+    client.submit_snapshot(&1u64, &create_test_hash(&env, 1), &admin);
+}
