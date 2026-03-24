@@ -1,12 +1,18 @@
 [workspace]
 resolver = "2"
 members = [
-  "example-contract",
   "snapshot-contract",
   "stellar_insights",
   "analytics",
   "benches",
+  "governance",
 ]
+
+# Clippy linting configuration for all contracts
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
 
 [workspace.dependencies]
 soroban-sdk = "21.0.0"
