@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -9,6 +9,19 @@ pub struct SnapshotMetadata {
     pub hash: BytesN<32>,
     // Extendable for future fields
 }
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TimelockAction {
+    pub action_type: String,
+    pub new_admin: Address,
+    pub proposer: Address,
+    pub proposed_at: u64,
+    pub executable_at: u64,
+    pub executed: bool,
+}
+
+const TIMELOCK_DELAY: u64 = 172800; // 48 hours in seconds
 
 #[contracttype]
 pub enum DataKey {
@@ -22,6 +35,10 @@ pub enum DataKey {
     Paused,
     /// Governance contract address (only it can call set_admin_by_governance / set_paused_by_governance)
     Governance,
+    /// Auto-incrementing ID counter for timelock actions
+    NextActionId,
+    /// Timelock action keyed by action ID
+    TimelockAction(u64),
 }
 
 #[contract]
@@ -495,6 +512,112 @@ impl AnalyticsContract {
             results.push_back(snapshots.get(epoch));
         }
         results
+    }
+
+    /// Propose an admin change with a 48-hour timelock.
+    /// Only the current admin can propose. Returns the action ID.
+    pub fn propose_admin_change(env: Env, proposer: Address, new_admin: Address) -> u64 {
+        proposer.require_auth();
+
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized: admin not set");
+
+        if proposer != admin {
+            panic!("Unauthorized: only the admin can propose changes");
+        }
+
+        let action_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextActionId)
+            .unwrap_or(0u64);
+
+        let now = env.ledger().timestamp();
+        let action = TimelockAction {
+            action_type: String::from_str(&env, "set_admin"),
+            new_admin: new_admin.clone(),
+            proposer: proposer.clone(),
+            proposed_at: now,
+            executable_at: now + TIMELOCK_DELAY,
+            executed: false,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::TimelockAction(action_id), &action);
+        env.storage()
+            .instance()
+            .set(&DataKey::NextActionId, &(action_id + 1));
+
+        env.events().publish(
+            (symbol_short!("propose"), proposer),
+            (action_id, new_admin, action.executable_at),
+        );
+
+        action_id
+    }
+
+    /// Execute a timelock action after the delay has passed.
+    pub fn execute_timelock_action(env: Env, executor: Address, action_id: u64) {
+        executor.require_auth();
+
+        let mut action: TimelockAction = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TimelockAction(action_id))
+            .expect("Action not found");
+
+        if env.ledger().timestamp() < action.executable_at {
+            panic!("Timelock not expired: action cannot be executed yet");
+        }
+
+        if action.executed {
+            panic!("Action already executed");
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Admin, &action.new_admin);
+
+        action.executed = true;
+        env.storage()
+            .persistent()
+            .set(&DataKey::TimelockAction(action_id), &action);
+
+        env.events()
+            .publish((symbol_short!("execute"), executor), action_id);
+    }
+
+    /// Cancel a pending timelock action. Only the current admin can cancel.
+    pub fn cancel_timelock_action(env: Env, admin: Address, action_id: u64) {
+        admin.require_auth();
+
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized: admin not set");
+
+        if admin != stored_admin {
+            panic!("Unauthorized: only the admin can cancel actions");
+        }
+
+        env.storage()
+            .persistent()
+            .remove(&DataKey::TimelockAction(action_id));
+
+        env.events()
+            .publish((symbol_short!("cancel"), admin), action_id);
+    }
+
+    /// Get a timelock action by ID.
+    pub fn get_timelock_action(env: Env, action_id: u64) -> Option<TimelockAction> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TimelockAction(action_id))
     }
 
     /// Check if contract is paused

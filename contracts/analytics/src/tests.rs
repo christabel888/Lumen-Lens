@@ -550,3 +550,104 @@ fn test_batch_operations_gas_efficiency() {
         assert_eq!(snapshot.hash, create_test_hash(&env, (i + 1) as u8));
     }
 }
+
+// ============================================================================
+// Timelock Tests
+// ============================================================================
+
+#[test]
+fn test_timelock_proposal() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    let action_id = client.propose_admin_change(&admin, &new_admin);
+
+    let action = client.get_timelock_action(&action_id).unwrap();
+    assert_eq!(action.proposer, admin);
+    assert_eq!(action.new_admin, new_admin);
+    assert_eq!(action.proposed_at, 1000);
+    assert_eq!(action.executable_at, 1000 + 172800);
+    assert!(!action.executed);
+    // Admin unchanged until executed
+    assert_eq!(client.get_admin(), Some(admin));
+}
+
+#[test]
+#[should_panic(expected = "Timelock not expired")]
+fn test_timelock_cannot_execute_early() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    let action_id = client.propose_admin_change(&admin, &new_admin);
+
+    // Advance time but not past the 48-hour delay
+    env.ledger().set_timestamp(1000 + 172799);
+    client.execute_timelock_action(&admin, &action_id);
+}
+
+#[test]
+fn test_timelock_execution_after_delay() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    let action_id = client.propose_admin_change(&admin, &new_admin);
+
+    // Advance time past the 48-hour delay
+    env.ledger().set_timestamp(1000 + 172800);
+    client.execute_timelock_action(&admin, &action_id);
+
+    // Admin should now be updated
+    assert_eq!(client.get_admin(), Some(new_admin));
+
+    // Action should be marked executed
+    let action = client.get_timelock_action(&action_id).unwrap();
+    assert!(action.executed);
+}
+
+#[test]
+fn test_timelock_cancellation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    let action_id = client.propose_admin_change(&admin, &new_admin);
+    assert!(client.get_timelock_action(&action_id).is_some());
+
+    client.cancel_timelock_action(&admin, &action_id);
+
+    // Action should be removed
+    assert!(client.get_timelock_action(&action_id).is_none());
+    // Admin unchanged
+    assert_eq!(client.get_admin(), Some(admin));
+}
