@@ -6,6 +6,7 @@ members = [
   "stellar_insights",
   "analytics",
   "benches",
+  "access-control",
 ]
 
 [workspace.dependencies]
