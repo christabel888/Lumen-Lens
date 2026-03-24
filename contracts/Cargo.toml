@@ -4,6 +4,7 @@ members = [
   "snapshot-contract",
   "stellar_insights",
   "analytics",
+  "benches",
   "governance",
 ]
 
