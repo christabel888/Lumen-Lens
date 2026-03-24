@@ -5,6 +5,7 @@ members = [
   "snapshot-contract",
   "stellar_insights",
   "analytics",
+  "benches",
 ]
 
 [workspace.dependencies]
