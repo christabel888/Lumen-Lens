@@ -25,6 +25,10 @@ pub enum DataKey {
     LatestEpoch,
     /// Per-epoch individual storage key for TTL management
     Snapshot(u64),
+    /// Emergency pause state (true = paused, false = active)
+    Paused,
+    /// Governance contract address (only it can call set_admin_by_governance / set_paused_by_governance)
+    Governance,
 }
 
 #[contract]
@@ -146,6 +150,12 @@ impl AnalyticsContract {
             .unwrap_or_else(|| Map::new(&env));
 
         snapshots.set(epoch, metadata.clone());
+        // Defense-in-depth: explicitly prevent overwriting an existing snapshot
+        if snapshots.contains_key(epoch) {
+            panic!("Snapshot immutability violated: epoch {} already exists in storage", epoch);
+        }
+
+        snapshots.set(epoch, metadata);
         env.storage()
             .persistent()
             .set(&DataKey::Snapshots, &snapshots);

@@ -6,6 +6,7 @@ members = [
   "analytics",
   "benches",
   "access-control",
+  "governance",
 ]
 
 # Clippy linting configuration for all contracts
