@@ -197,7 +197,10 @@ impl AnalyticsContract {
 
         // Defense-in-depth: explicitly prevent overwriting an existing snapshot
         if snapshots.contains_key(epoch) {
-            panic!("Snapshot immutability violated: epoch {} already exists in storage", epoch);
+            panic!(
+                "Snapshot immutability violated: epoch {} already exists in storage",
+                epoch
+            );
         }
 
         snapshots.set(epoch, metadata.clone());
@@ -207,7 +210,9 @@ impl AnalyticsContract {
         env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
 
         // Also store per-epoch key for TTL management
-        env.storage().persistent().set(&DataKey::Snapshot(epoch), &metadata);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshot(epoch), &metadata);
 
         timestamp
     }
@@ -277,12 +282,16 @@ impl AnalyticsContract {
             .get(&DataKey::Snapshots)
             .unwrap_or_else(|| Map::new(&env));
         snapshots.set(epoch, metadata.clone());
-        env.storage().persistent().set(&DataKey::Snapshots, &snapshots);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshots, &snapshots);
         env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
 
         // Store per-epoch key and set Soroban storage TTL
         let ledgers_to_live = (ttl / LEDGER_SECONDS) as u32;
-        env.storage().persistent().set(&DataKey::Snapshot(epoch), &metadata);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshot(epoch), &metadata);
         env.storage().persistent().extend_ttl(
             &DataKey::Snapshot(epoch),
             ledgers_to_live,
@@ -338,7 +347,9 @@ impl AnalyticsContract {
             }
         }
 
-        env.storage().persistent().set(&DataKey::Snapshots, &snapshots);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshots, &snapshots);
         cleaned
     }
 
