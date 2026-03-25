@@ -13,5 +13,5 @@ analytics = { path = "../analytics" }
 stellar-insights = { path = "../stellar_insights" }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports"], default-features = false }
 soroban-sdk = { workspace = true, features = ["testutils"] }

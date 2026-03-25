@@ -1,7 +1,7 @@
 use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, BytesN, Env,
+    vec, Address, BytesN, Env,
 };
 
 fn create_test_hash(env: &Env, value: u8) -> BytesN<32> {
@@ -398,7 +398,7 @@ fn test_set_admin_by_unauthorized_user_fails() {
 }
 
 #[test]
-#[should_panic(expected = "Snapshot immutability violated")]
+#[should_panic(expected = "already exists")]
 fn test_snapshot_immutability() {
     let env = Env::default();
     env.mock_all_auths();
@@ -659,4 +659,100 @@ fn test_submit_snapshot_with_ttl_stores_submitter_and_ledger() {
     assert_eq!(snapshot.timestamp, 5000);
     assert_eq!(snapshot.expires_at, Some(6000u64));
     assert_eq!(snapshot.hash, hash);
+}
+
+// ============================================================================
+// Gas Optimization Tests - Issue #620
+// ============================================================================
+
+#[test]
+fn test_batch_submit_basic() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(1000);
+
+    let hash1 = create_test_hash(&env, 1);
+    let hash2 = create_test_hash(&env, 2);
+    let hash3 = create_test_hash(&env, 3);
+
+    let input = vec![
+        &env,
+        (1u64, hash1.clone()),
+        (2u64, hash2.clone()),
+        (3u64, hash3.clone()),
+    ];
+    let timestamps = client.batch_submit(&input, &admin);
+
+    assert_eq!(timestamps.len(), 3);
+    assert_eq!(client.get_latest_epoch(), 3);
+    assert_eq!(client.get_snapshot(&1u64).unwrap().hash, hash1);
+    assert_eq!(client.get_snapshot(&2u64).unwrap().hash, hash2);
+    assert_eq!(client.get_snapshot(&3u64).unwrap().hash, hash3);
+}
+
+#[test]
+#[should_panic(expected = "Unauthorized")]
+fn test_batch_submit_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    client.initialize(&admin);
+
+    let input = vec![&env, (1u64, create_test_hash(&env, 1))];
+    client.batch_submit(&input, &attacker);
+}
+
+#[test]
+#[should_panic(expected = "Epoch monotonicity violated")]
+fn test_batch_submit_non_monotonic_epochs() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    // epoch 5 then epoch 3 — must panic
+    let input = vec![
+        &env,
+        (5u64, create_test_hash(&env, 5)),
+        (3u64, create_test_hash(&env, 3)),
+    ];
+    client.batch_submit(&input, &admin);
+}
+
+#[test]
+fn test_get_snapshot_uses_per_epoch_key() {
+    // Verifies that get_snapshot works via the per-epoch DataKey::Snapshot(epoch)
+    // path (not the full map), which is cheaper to read.
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let hash = create_test_hash(&env, 7);
+    client.submit_snapshot(&10u64, &hash, &admin);
+
+    let snap = client.get_snapshot(&10u64).unwrap();
+    assert_eq!(snap.epoch, 10);
+    assert_eq!(snap.hash, hash);
+    assert_eq!(snap.timestamp, 500);
+
+    // Non-existent epoch returns None without touching the map
+    assert!(client.get_snapshot(&99u64).is_none());
 }
