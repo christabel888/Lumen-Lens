@@ -660,3 +660,80 @@ fn test_submit_snapshot_with_ttl_stores_submitter_and_ledger() {
     assert_eq!(snapshot.expires_at, Some(6000u64));
     assert_eq!(snapshot.hash, hash);
 }
+
+// ============================================================================
+// Rate Limiting Tests - Tests for Issue #600
+// ============================================================================
+
+#[test]
+fn test_rate_limiting() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    // Submit up to the limit without issue
+    for epoch in 1u64..=5 {
+        let hash = create_test_hash(&env, epoch as u8);
+        client.submit_snapshot(&epoch, &hash, &admin);
+    }
+
+    assert_eq!(client.get_latest_epoch(), 5);
+}
+
+#[test]
+#[should_panic(expected = "Rate limit exceeded")]
+fn test_rate_limit_exceeded() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    // Submit MAX_CALLS_PER_WINDOW (100) snapshots to exhaust the limit
+    for epoch in 1u64..=100 {
+        let hash = create_test_hash(&env, (epoch % 255) as u8);
+        client.submit_snapshot(&epoch, &hash, &admin);
+    }
+
+    // The 101st call within the same window should panic
+    let hash = create_test_hash(&env, 101);
+    client.submit_snapshot(&101u64, &hash, &admin);
+}
+
+#[test]
+fn test_rate_limit_window_reset() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    // Exhaust the rate limit
+    for epoch in 1u64..=100 {
+        let hash = create_test_hash(&env, (epoch % 255) as u8);
+        client.submit_snapshot(&epoch, &hash, &admin);
+    }
+
+    // Advance time past the 1-hour window (3600 seconds)
+    env.ledger().set_timestamp(1000 + 3601);
+
+    // Should succeed again after window reset
+    let hash = create_test_hash(&env, 101);
+    let ts = client.submit_snapshot(&101u64, &hash, &admin);
+    assert_eq!(ts, 1000 + 3601);
+    assert_eq!(client.get_latest_epoch(), 101);
+}

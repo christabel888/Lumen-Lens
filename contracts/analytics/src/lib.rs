@@ -4,6 +4,9 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Ma
 const DEFAULT_SNAPSHOT_TTL: u64 = 7_776_000; // 90 days in seconds
 const LEDGER_SECONDS: u64 = 5; // ~5 seconds per ledger
 
+const RATE_LIMIT_WINDOW: u64 = 3600; // 1 hour
+const MAX_CALLS_PER_WINDOW: u32 = 100;
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotMetadata {
@@ -13,6 +16,14 @@ pub struct SnapshotMetadata {
     pub submitter: Address,
     pub ledger_sequence: u32,
     pub expires_at: Option<u64>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RateLimitInfo {
+    pub last_call: u64,
+    pub call_count: u32,
+    pub window_start: u64,
 }
 
 #[contracttype]
@@ -29,6 +40,38 @@ pub enum DataKey {
     Paused,
     /// Governance contract address (only it can call set_admin_by_governance / set_paused_by_governance)
     Governance,
+    /// Per-caller rate limit tracking
+    RateLimit(Address),
+}
+
+fn check_rate_limit(env: &Env, caller: &Address) {
+    let now = env.ledger().timestamp();
+
+    let mut rate_info: RateLimitInfo = env
+        .storage()
+        .temporary()
+        .get(&DataKey::RateLimit(caller.clone()))
+        .unwrap_or(RateLimitInfo {
+            last_call: 0,
+            call_count: 0,
+            window_start: now,
+        });
+
+    if now - rate_info.window_start > RATE_LIMIT_WINDOW {
+        rate_info.call_count = 0;
+        rate_info.window_start = now;
+    }
+
+    if rate_info.call_count >= MAX_CALLS_PER_WINDOW {
+        panic!("Rate limit exceeded: too many calls in this window");
+    }
+
+    rate_info.call_count += 1;
+    rate_info.last_call = now;
+
+    env.storage()
+        .temporary()
+        .set(&DataKey::RateLimit(caller.clone()), &rate_info);
 }
 
 #[contract]
@@ -101,6 +144,9 @@ impl AnalyticsContract {
         // Require authentication from the caller
         caller.require_auth();
 
+        // Enforce rate limit
+        check_rate_limit(&env, &caller);
+
         // Verify caller is the authorized admin
         let admin: Address = env
             .storage()
@@ -149,20 +195,24 @@ impl AnalyticsContract {
             .get(&DataKey::Snapshots)
             .unwrap_or_else(|| Map::new(&env));
 
-        snapshots.set(epoch, metadata.clone());
         // Defense-in-depth: explicitly prevent overwriting an existing snapshot
         if snapshots.contains_key(epoch) {
-            panic!("Snapshot immutability violated: epoch {} already exists in storage", epoch);
+            panic!(
+                "Snapshot immutability violated: epoch {} already exists in storage",
+                epoch
+            );
         }
 
-        snapshots.set(epoch, metadata);
+        snapshots.set(epoch, metadata.clone());
         env.storage()
             .persistent()
             .set(&DataKey::Snapshots, &snapshots);
         env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
 
         // Also store per-epoch key for TTL management
-        env.storage().persistent().set(&DataKey::Snapshot(epoch), &metadata);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshot(epoch), &metadata);
 
         timestamp
     }
@@ -177,6 +227,9 @@ impl AnalyticsContract {
         ttl_seconds: Option<u64>,
     ) -> u64 {
         caller.require_auth();
+
+        // Enforce rate limit
+        check_rate_limit(&env, &caller);
 
         let admin: Address = env
             .storage()
@@ -229,12 +282,16 @@ impl AnalyticsContract {
             .get(&DataKey::Snapshots)
             .unwrap_or_else(|| Map::new(&env));
         snapshots.set(epoch, metadata.clone());
-        env.storage().persistent().set(&DataKey::Snapshots, &snapshots);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshots, &snapshots);
         env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
 
         // Store per-epoch key and set Soroban storage TTL
         let ledgers_to_live = (ttl / LEDGER_SECONDS) as u32;
-        env.storage().persistent().set(&DataKey::Snapshot(epoch), &metadata);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshot(epoch), &metadata);
         env.storage().persistent().extend_ttl(
             &DataKey::Snapshot(epoch),
             ledgers_to_live,
@@ -290,7 +347,9 @@ impl AnalyticsContract {
             }
         }
 
-        env.storage().persistent().set(&DataKey::Snapshots, &snapshots);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshots, &snapshots);
         cleaned
     }
 
