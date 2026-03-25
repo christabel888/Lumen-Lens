@@ -479,7 +479,11 @@ fn test_error_descriptions_are_non_empty() {
         Error::InvalidHashSize,
     ];
     for e in errors {
-        assert!(!e.description().is_empty(), "Error {:?} has empty description", e);
+        assert!(
+            !e.description().is_empty(),
+            "Error {:?} has empty description",
+            e
+        );
     }
 }
 
@@ -523,7 +527,10 @@ fn test_error_messages_unauthorized() {
 
     let result = client.try_submit_snapshot(&1, &create_test_hash(&env, 1), &attacker);
     assert_eq!(result, Err(Ok(Error::Unauthorized)));
-    assert_eq!(Error::Unauthorized.description(), "Caller is not authorized");
+    assert_eq!(
+        Error::Unauthorized.description(),
+        "Caller is not authorized"
+    );
     assert_eq!(Error::Unauthorized.code(), 3);
 }
 
@@ -540,7 +547,10 @@ fn test_error_messages_invalid_epoch_zero() {
 
     let result = client.try_submit_snapshot(&0, &create_test_hash(&env, 1), &admin);
     assert_eq!(result, Err(Ok(Error::InvalidEpochZero)));
-    assert_eq!(Error::InvalidEpochZero.description(), "Epoch must be greater than 0");
+    assert_eq!(
+        Error::InvalidEpochZero.description(),
+        "Epoch must be greater than 0"
+    );
     assert_eq!(Error::InvalidEpochZero.code(), 5);
 }
 
@@ -558,7 +568,10 @@ fn test_error_messages_duplicate_epoch() {
     client.submit_snapshot(&1, &create_test_hash(&env, 1), &admin);
     let result = client.try_submit_snapshot(&1, &create_test_hash(&env, 2), &admin);
     assert_eq!(result, Err(Ok(Error::DuplicateEpoch)));
-    assert_eq!(Error::DuplicateEpoch.description(), "Snapshot for this epoch already exists");
+    assert_eq!(
+        Error::DuplicateEpoch.description(),
+        "Snapshot for this epoch already exists"
+    );
     assert_eq!(Error::DuplicateEpoch.code(), 7);
 }
 
@@ -573,7 +586,10 @@ fn test_error_messages_snapshot_not_found() {
 
     let result = client.try_get_snapshot(&999);
     assert_eq!(result, Err(Ok(Error::SnapshotNotFound)));
-    assert_eq!(Error::SnapshotNotFound.description(), "No snapshot found for the requested epoch");
+    assert_eq!(
+        Error::SnapshotNotFound.description(),
+        "No snapshot found for the requested epoch"
+    );
     assert_eq!(Error::SnapshotNotFound.code(), 13);
 }
 
@@ -588,7 +604,10 @@ fn test_error_messages_admin_not_set() {
     let caller = Address::generate(&env);
     let result = client.try_submit_snapshot(&1, &create_test_hash(&env, 1), &caller);
     assert_eq!(result, Err(Ok(Error::AdminNotSet)));
-    assert_eq!(Error::AdminNotSet.description(), "Admin address has not been initialized");
+    assert_eq!(
+        Error::AdminNotSet.description(),
+        "Admin address has not been initialized"
+    );
     assert_eq!(Error::AdminNotSet.code(), 14);
 }
 
