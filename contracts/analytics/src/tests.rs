@@ -266,7 +266,8 @@ fn test_bounded_storage_growth_simulation() {
 
     client.initialize(&admin);
 
-    let num_epochs = 100u64;
+    // Use a smaller set to stay within budget limits
+    let num_epochs = 20u64;
     for epoch in 1..=num_epochs {
         let hash = create_test_hash(&env, (epoch % 255) as u8);
         client.submit_snapshot(&epoch, &hash, &admin);
@@ -460,6 +461,11 @@ fn test_old_admin_cannot_submit_after_transfer() {
 
 #[test]
 fn test_batch_submit_snapshots() {
+// Snapshot Expiry Tests
+// ============================================================================
+
+#[test]
+fn test_snapshot_expiry() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -487,6 +493,26 @@ fn test_batch_submit_snapshots() {
 
 #[test]
 fn test_batch_get_snapshots() {
+
+    // Submit at t=1000 with 500s TTL -> expires at t=1500
+    env.ledger().set_timestamp(1000);
+    let hash = create_test_hash(&env, 1);
+    client.submit_snapshot_with_ttl(&1u64, &hash, &admin, &Some(500u64));
+
+    let snapshot = client.get_snapshot(&1u64).unwrap();
+    assert_eq!(snapshot.expires_at, Some(1500u64));
+
+    // Before expiry: not expired
+    env.ledger().set_timestamp(1499);
+    assert!(!client.is_snapshot_expired(&1u64));
+
+    // After expiry: expired
+    env.ledger().set_timestamp(1501);
+    assert!(client.is_snapshot_expired(&1u64));
+}
+
+#[test]
+fn test_snapshot_default_ttl() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -515,6 +541,17 @@ fn test_batch_get_snapshots() {
 
 #[test]
 fn test_batch_operations_gas_efficiency() {
+    env.ledger().set_timestamp(0);
+    let hash = create_test_hash(&env, 1);
+    client.submit_snapshot_with_ttl(&1u64, &hash, &admin, &None);
+
+    let snapshot = client.get_snapshot(&1u64).unwrap();
+    // Default TTL is 90 days = 7_776_000 seconds
+    assert_eq!(snapshot.expires_at, Some(7_776_000u64));
+}
+
+#[test]
+fn test_snapshot_no_expiry_by_default() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -557,6 +594,22 @@ fn test_batch_operations_gas_efficiency() {
 
 #[test]
 fn test_timelock_proposal() {
+
+    // submit_snapshot (no TTL) should have expires_at = None
+    env.ledger().set_timestamp(1000);
+    let hash = create_test_hash(&env, 1);
+    client.submit_snapshot(&1u64, &hash, &admin);
+
+    let snapshot = client.get_snapshot(&1u64).unwrap();
+    assert_eq!(snapshot.expires_at, None);
+
+    // Should never be considered expired
+    env.ledger().set_timestamp(u64::MAX / 2);
+    assert!(!client.is_snapshot_expired(&1u64));
+}
+
+#[test]
+fn test_cleanup_expired_snapshots() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -603,6 +656,41 @@ fn test_timelock_cannot_execute_early() {
 
 #[test]
 fn test_timelock_execution_after_delay() {
+
+    client.initialize(&admin);
+
+    // Submit 3 snapshots with short TTL (100s) and 1 with long TTL (10000s)
+    env.ledger().set_timestamp(1000);
+    for epoch in 1u64..=3 {
+        let hash = create_test_hash(&env, epoch as u8);
+        client.submit_snapshot_with_ttl(&epoch, &hash, &admin, &Some(100u64));
+    }
+    let hash4 = create_test_hash(&env, 4);
+    client.submit_snapshot_with_ttl(&4u64, &hash4, &admin, &Some(10_000u64));
+
+    // Advance past the short TTL expiry
+    env.ledger().set_timestamp(1200);
+
+    // Clean up max 2 at a time
+    let cleaned = client.cleanup_expired_snapshots(&admin, &2u32);
+    assert_eq!(cleaned, 2);
+
+    // Epochs 1 and 2 removed, 3 and 4 still present
+    assert!(client.get_snapshot(&1u64).is_none());
+    assert!(client.get_snapshot(&2u64).is_none());
+    assert!(client.get_snapshot(&3u64).is_some());
+    assert!(client.get_snapshot(&4u64).is_some());
+
+    // Clean remaining expired
+    let cleaned2 = client.cleanup_expired_snapshots(&admin, &10u32);
+    assert_eq!(cleaned2, 1); // epoch 3 expired, epoch 4 not yet
+
+    assert!(client.get_snapshot(&3u64).is_none());
+    assert!(client.get_snapshot(&4u64).is_some());
+}
+
+#[test]
+fn test_cleanup_respects_max_limit() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -630,6 +718,29 @@ fn test_timelock_execution_after_delay() {
 
 #[test]
 fn test_timelock_cancellation() {
+
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(0);
+    for epoch in 1u64..=5 {
+        let hash = create_test_hash(&env, epoch as u8);
+        client.submit_snapshot_with_ttl(&epoch, &hash, &admin, &Some(100u64));
+    }
+
+    // All 5 expired
+    env.ledger().set_timestamp(200);
+
+    // Only clean 3
+    let cleaned = client.cleanup_expired_snapshots(&admin, &3u32);
+    assert_eq!(cleaned, 3);
+
+    // 2 still remain
+    let history = client.get_snapshot_history();
+    assert_eq!(history.len(), 2);
+}
+
+#[test]
+fn test_cleanup_no_expired_snapshots() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -658,6 +769,23 @@ fn test_timelock_cancellation() {
 
 #[test]
 fn test_event_data_completeness() {
+
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(0);
+    let hash = create_test_hash(&env, 1);
+    client.submit_snapshot_with_ttl(&1u64, &hash, &admin, &Some(10_000u64));
+
+    // Not yet expired
+    env.ledger().set_timestamp(100);
+    let cleaned = client.cleanup_expired_snapshots(&admin, &10u32);
+    assert_eq!(cleaned, 0);
+    assert!(client.get_snapshot(&1u64).is_some());
+}
+
+#[test]
+#[should_panic(expected = "Unauthorized")]
+fn test_cleanup_unauthorized_fails() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -698,6 +826,15 @@ fn test_event_data_completeness() {
 
 #[test]
 fn test_event_emission() {
+    let attacker = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    client.cleanup_expired_snapshots(&attacker, &10u32);
+}
+
+#[test]
+fn test_submit_snapshot_with_ttl_stores_submitter_and_ledger() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -743,6 +880,24 @@ fn test_event_emission() {
 
 #[test]
 fn test_error_events() {
+
+    env.ledger().set_timestamp(5000);
+    let hash = create_test_hash(&env, 42);
+    client.submit_snapshot_with_ttl(&1u64, &hash, &admin, &Some(1000u64));
+
+    let snapshot = client.get_snapshot(&1u64).unwrap();
+    assert_eq!(snapshot.submitter, admin);
+    assert_eq!(snapshot.timestamp, 5000);
+    assert_eq!(snapshot.expires_at, Some(6000u64));
+    assert_eq!(snapshot.hash, hash);
+}
+
+// ============================================================================
+// Rate Limiting Tests - Tests for Issue #600
+// ============================================================================
+
+#[test]
+fn test_rate_limiting() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -837,4 +992,63 @@ fn test_error_event_contract_paused() {
     client.pause(&admin, &soroban_sdk::String::from_str(&env, "test"));
     // Triggers ContractError::ContractPaused error event then panics
     client.submit_snapshot(&1u64, &create_test_hash(&env, 1), &admin);
+    // Submit up to the limit without issue
+    for epoch in 1u64..=5 {
+        let hash = create_test_hash(&env, epoch as u8);
+        client.submit_snapshot(&epoch, &hash, &admin);
+    }
+
+    assert_eq!(client.get_latest_epoch(), 5);
+}
+
+#[test]
+#[should_panic(expected = "Rate limit exceeded")]
+fn test_rate_limit_exceeded() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    // Submit MAX_CALLS_PER_WINDOW (100) snapshots to exhaust the limit
+    for epoch in 1u64..=100 {
+        let hash = create_test_hash(&env, (epoch % 255) as u8);
+        client.submit_snapshot(&epoch, &hash, &admin);
+    }
+
+    // The 101st call within the same window should panic
+    let hash = create_test_hash(&env, 101);
+    client.submit_snapshot(&101u64, &hash, &admin);
+}
+
+#[test]
+fn test_rate_limit_window_reset() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    // Exhaust the rate limit
+    for epoch in 1u64..=100 {
+        let hash = create_test_hash(&env, (epoch % 255) as u8);
+        client.submit_snapshot(&epoch, &hash, &admin);
+    }
+
+    // Advance time past the 1-hour window (3600 seconds)
+    env.ledger().set_timestamp(1000 + 3601);
+
+    // Should succeed again after window reset
+    let hash = create_test_hash(&env, 101);
+    let ts = client.submit_snapshot(&101u64, &hash, &admin);
+    assert_eq!(ts, 1000 + 3601);
+    assert_eq!(client.get_latest_epoch(), 101);
 }

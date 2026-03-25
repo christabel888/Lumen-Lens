@@ -112,12 +112,12 @@ impl StellarInsightsContract {
 
         // Verify caller is the admin
         if caller != admin {
-            return Err(Error::UnauthorizedCaller);
+            return Err(Error::Unauthorized);
         }
 
         // Validate epoch is not zero
         if epoch == 0 {
-            return Err(Error::InvalidEpoch);
+            return Err(Error::InvalidEpochZero);
         }
 
         // Get existing snapshots map or create new one

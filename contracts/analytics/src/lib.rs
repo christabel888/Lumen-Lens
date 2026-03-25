@@ -53,13 +53,29 @@ fn emit_error_event(
     );
 }
 
+const DEFAULT_SNAPSHOT_TTL: u64 = 7_776_000; // 90 days in seconds
+const LEDGER_SECONDS: u64 = 5; // ~5 seconds per ledger
+
+const RATE_LIMIT_WINDOW: u64 = 3600; // 1 hour
+const MAX_CALLS_PER_WINDOW: u32 = 100;
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotMetadata {
     pub epoch: u64,
     pub timestamp: u64,
     pub hash: BytesN<32>,
-    // Extendable for future fields
+    pub submitter: Address,
+    pub ledger_sequence: u32,
+    pub expires_at: Option<u64>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RateLimitInfo {
+    pub last_call: u64,
+    pub call_count: u32,
+    pub window_start: u64,
 }
 
 #[contracttype]
@@ -112,6 +128,8 @@ pub enum DataKey {
     Snapshots,
     /// Latest epoch number (instance storage for quick access)
     LatestEpoch,
+    /// Per-epoch individual storage key for TTL management
+    Snapshot(u64),
     /// Emergency pause state (true = paused, false = active)
     Paused,
     /// Governance contract address (only it can call set_admin_by_governance / set_paused_by_governance)
@@ -120,6 +138,38 @@ pub enum DataKey {
     NextActionId,
     /// Timelock action keyed by action ID
     TimelockAction(u64),
+    /// Per-caller rate limit tracking
+    RateLimit(Address),
+}
+
+fn check_rate_limit(env: &Env, caller: &Address) {
+    let now = env.ledger().timestamp();
+
+    let mut rate_info: RateLimitInfo = env
+        .storage()
+        .temporary()
+        .get(&DataKey::RateLimit(caller.clone()))
+        .unwrap_or(RateLimitInfo {
+            last_call: 0,
+            call_count: 0,
+            window_start: now,
+        });
+
+    if now - rate_info.window_start > RATE_LIMIT_WINDOW {
+        rate_info.call_count = 0;
+        rate_info.window_start = now;
+    }
+
+    if rate_info.call_count >= MAX_CALLS_PER_WINDOW {
+        panic!("Rate limit exceeded: too many calls in this window");
+    }
+
+    rate_info.call_count += 1;
+    rate_info.last_call = now;
+
+    env.storage()
+        .temporary()
+        .set(&DataKey::RateLimit(caller.clone()), &rate_info);
 }
 
 #[contract]
@@ -199,6 +249,9 @@ impl AnalyticsContract {
         // Require authentication from the caller
         caller.require_auth();
 
+        // Enforce rate limit
+        check_rate_limit(&env, &caller);
+
         // Verify caller is the authorized admin
         let admin: Address = env
             .storage()
@@ -265,6 +318,10 @@ impl AnalyticsContract {
             epoch,
             timestamp,
             hash: hash.clone(),
+            hash,
+            submitter: caller.clone(),
+            ledger_sequence: env.ledger().sequence(),
+            expires_at: None,
         };
 
         let mut snapshots: Map<u64, SnapshotMetadata> = env
@@ -283,9 +340,91 @@ impl AnalyticsContract {
                 "Epoch already exists in storage",
             );
             panic!("Snapshot immutability violated: epoch {} already exists in storage", epoch);
+            panic!(
+                "Snapshot immutability violated: epoch {} already exists in storage",
+                epoch
+            );
         }
 
-        snapshots.set(epoch, metadata);
+        snapshots.set(epoch, metadata.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshots, &snapshots);
+        env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
+
+        // Also store per-epoch key for TTL management
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshot(epoch), &metadata);
+
+        timestamp
+    }
+
+    /// Submit a snapshot with an optional TTL (defaults to 90 days).
+    /// Stores expiry metadata and sets Soroban storage TTL accordingly.
+    pub fn submit_snapshot_with_ttl(
+        env: Env,
+        epoch: u64,
+        hash: BytesN<32>,
+        caller: Address,
+        ttl_seconds: Option<u64>,
+    ) -> u64 {
+        caller.require_auth();
+
+        // Enforce rate limit
+        check_rate_limit(&env, &caller);
+
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized: admin not set");
+
+        if caller != admin {
+            panic!("Unauthorized: only the admin can submit snapshots");
+        }
+
+        if epoch == 0 {
+            panic!("Invalid epoch: must be greater than 0");
+        }
+
+        let latest: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LatestEpoch)
+            .unwrap_or(0);
+
+        if epoch <= latest {
+            if epoch == latest {
+                panic!("Snapshot for epoch {} already exists", epoch);
+            } else {
+                panic!(
+                    "Epoch monotonicity violated: epoch {} must be strictly greater than latest {}",
+                    epoch, latest
+                );
+            }
+        }
+
+        let timestamp = env.ledger().timestamp();
+        let ttl = ttl_seconds.unwrap_or(DEFAULT_SNAPSHOT_TTL);
+        let expires_at = timestamp + ttl;
+
+        let metadata = SnapshotMetadata {
+            epoch,
+            timestamp,
+            hash,
+            submitter: caller.clone(),
+            ledger_sequence: env.ledger().sequence(),
+            expires_at: Some(expires_at),
+        };
+
+        // Store in the shared map
+        let mut snapshots: Map<u64, SnapshotMetadata> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Snapshots)
+            .unwrap_or_else(|| Map::new(&env));
+        snapshots.set(epoch, metadata.clone());
         env.storage()
             .persistent()
             .set(&DataKey::Snapshots, &snapshots);
@@ -301,9 +440,87 @@ impl AnalyticsContract {
                 previous_epoch: latest,
                 ledger_sequence,
             },
+        // Store per-epoch key and set Soroban storage TTL
+        let ledgers_to_live = (ttl / LEDGER_SECONDS) as u32;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshot(epoch), &metadata);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Snapshot(epoch),
+            ledgers_to_live,
+            ledgers_to_live,
         );
 
         timestamp
+    }
+
+    /// Remove expired snapshots from the shared map.
+    /// Admin-only. Iterates up to `max_to_clean` epochs and removes those past expiry.
+    /// Returns the number of snapshots cleaned.
+    pub fn cleanup_expired_snapshots(env: Env, admin: Address, max_to_clean: u32) -> u32 {
+        admin.require_auth();
+
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized: admin not set");
+
+        if admin != stored_admin {
+            panic!("Unauthorized: only the admin can clean up snapshots");
+        }
+
+        let now = env.ledger().timestamp();
+        let mut cleaned = 0u32;
+
+        let latest_epoch: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LatestEpoch)
+            .unwrap_or(0);
+
+        let mut snapshots: Map<u64, SnapshotMetadata> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Snapshots)
+            .unwrap_or_else(|| Map::new(&env));
+
+        for epoch in 1..=latest_epoch {
+            if cleaned >= max_to_clean {
+                break;
+            }
+            if let Some(metadata) = snapshots.get(epoch) {
+                if let Some(expires_at) = metadata.expires_at {
+                    if now > expires_at {
+                        snapshots.remove(epoch);
+                        env.storage().persistent().remove(&DataKey::Snapshot(epoch));
+                        cleaned += 1;
+                    }
+                }
+            }
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Snapshots, &snapshots);
+        cleaned
+    }
+
+    /// Check whether a snapshot has expired.
+    pub fn is_snapshot_expired(env: Env, epoch: u64) -> bool {
+        let snapshots: Map<u64, SnapshotMetadata> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Snapshots)
+            .unwrap_or_else(|| Map::new(&env));
+
+        match snapshots.get(epoch) {
+            Some(metadata) => match metadata.expires_at {
+                Some(expires_at) => env.ledger().timestamp() > expires_at,
+                None => false,
+            },
+            None => false,
+        }
     }
 
     /// Get snapshot metadata for a specific epoch
