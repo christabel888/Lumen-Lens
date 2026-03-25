@@ -1,8 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use soroban_sdk::{
-    testutils::Address as _,
-    Address, BytesN, Env,
-};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
 use analytics::{AnalyticsContract, AnalyticsContractClient};
 use stellar_insights::{StellarInsightsContract, StellarInsightsContractClient};
@@ -132,19 +129,15 @@ fn bench_snapshot_history_growth(c: &mut Criterion) {
     let mut group = c.benchmark_group("analytics::history_read");
 
     for size in [10u64, 50, 100] {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(size),
-            &size,
-            |b, &n| {
-                let env = Env::default();
-                let (client, admin) = setup_analytics(&env);
-                for epoch in 1..=n {
-                    let hash = make_hash(&env, (epoch % 255) as u8);
-                    client.submit_snapshot(&epoch, &hash, &admin);
-                }
-                b.iter(|| client.get_snapshot_history())
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &n| {
+            let env = Env::default();
+            let (client, admin) = setup_analytics(&env);
+            for epoch in 1..=n {
+                let hash = make_hash(&env, (epoch % 255) as u8);
+                client.submit_snapshot(&epoch, &hash, &admin);
+            }
+            b.iter(|| client.get_snapshot_history())
+        });
     }
 
     group.finish();
