@@ -440,6 +440,7 @@ impl AnalyticsContract {
             panic!("Contract is paused for emergency maintenance");
         }
         caller.require_auth();
+        check_rate_limit(&env, &caller);
         let admin = require_admin(&env);
         if caller != admin {
             panic!("Unauthorized: only the admin can submit snapshots");
@@ -803,6 +804,7 @@ impl AnalyticsContract {
         }
 
         caller.require_auth();
+        check_rate_limit(&env, &caller);
 
         let admin: Address = env
             .storage()
@@ -876,6 +878,7 @@ impl AnalyticsContract {
     /// Propose an admin change with a 48-hour timelock.
     pub fn propose_admin_change(env: Env, proposer: Address, new_admin: Address) -> u64 {
         proposer.require_auth();
+        check_rate_limit(&env, &proposer);
 
         let admin: Address = env
             .storage()
@@ -1081,6 +1084,7 @@ impl AnalyticsContract {
         _action_data: BytesN<32>,
     ) -> u64 {
         proposer.require_auth();
+        check_rate_limit(&env, &proposer);
 
         let config: MultiSigConfig = env
             .storage()
@@ -1123,6 +1127,7 @@ impl AnalyticsContract {
     /// Sign an existing pending action. Returns `true` if the threshold is now reached.
     pub fn sign_action(env: Env, signer: Address, action_id: u64) -> bool {
         signer.require_auth();
+        check_rate_limit(&env, &signer);
 
         let config: MultiSigConfig = env
             .storage()

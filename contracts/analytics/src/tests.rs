@@ -1,5 +1,12 @@
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+
 use super::*;
-use soroban_sdk::{testutils::{Address as _, Ledger}, vec, Address, BytesN, Env, Vec};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    vec, Address, BytesN, Env, Vec,
+};
 
 fn create_test_hash(env: &Env, value: u8) -> BytesN<32> {
     BytesN::from_array(env, &[value; 32])
