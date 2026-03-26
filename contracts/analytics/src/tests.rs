@@ -1278,6 +1278,11 @@ fn test_prune_old_snapshots() {
 }
 
 // ============================================================================
+// Pagination Tests — Issue #609
+// ============================================================================
+
+#[test]
+fn test_pagination() {
 // Emergency Withdrawal Tests - Issue #597
 // ============================================================================
 
@@ -1292,6 +1297,39 @@ fn test_emergency_withdrawal() {
 
     client.initialize(&admin);
 
+    // Submit 5 sequential snapshots (epochs 1-5)
+    for epoch in 1u64..=5 {
+        let hash = create_test_hash(&env, epoch as u8);
+        client.submit_snapshot(&epoch, &hash, &admin);
+    }
+
+    // --- First page: limit=3, no cursor ---
+    let page1 = client.get_snapshots_paginated(&3u32, &None);
+
+    assert_eq!(page1.snapshots.len(), 3);
+    assert_eq!(page1.total_count, 5); // latest epoch
+    assert!(page1.has_more);
+    assert_eq!(page1.next_cursor, Some(4u64));
+
+    // Verify snapshot contents are in epoch order
+    assert_eq!(page1.snapshots.get(0).unwrap().epoch, 1u64);
+    assert_eq!(page1.snapshots.get(1).unwrap().epoch, 2u64);
+    assert_eq!(page1.snapshots.get(2).unwrap().epoch, 3u64);
+
+    // --- Second page: limit=3, cursor from first page ---
+    let page2 = client.get_snapshots_paginated(&3u32, &page1.next_cursor);
+
+    assert_eq!(page2.snapshots.len(), 2); // only epochs 4 and 5 remain
+    assert_eq!(page2.total_count, 5);
+    assert!(!page2.has_more);
+    assert_eq!(page2.next_cursor, None);
+
+    assert_eq!(page2.snapshots.get(0).unwrap().epoch, 4u64);
+    assert_eq!(page2.snapshots.get(1).unwrap().epoch, 5u64);
+}
+
+#[test]
+fn test_pagination_cursor() {
     // Set up a token
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
@@ -1349,6 +1387,57 @@ fn test_emergency_withdrawal_unauthorized() {
 
     client.initialize(&admin);
 
+    // Submit snapshots at non-sequential epochs: 1, 3, 5, 7, 9
+    // Gaps (2, 4, 6, 8) are skipped by get_snapshots_paginated transparently.
+    for epoch in [1u64, 3u64, 5u64, 7u64, 9u64] {
+        let hash = create_test_hash(&env, epoch as u8);
+        client.submit_snapshot(&epoch, &hash, &admin);
+    }
+
+    // total_count == latest_epoch == 9
+    assert_eq!(client.get_latest_epoch(), 9u64);
+
+    // --- Page 1: limit=2, start from beginning ---
+    // Iterates epochs 1..=9: finds 1, skips 2, finds 3 -> count=2
+    // epoch 4: count >= limit -> next_cursor = Some(4), break
+    let page1 = client.get_snapshots_paginated(&2u32, &None);
+    assert_eq!(page1.snapshots.len(), 2);
+    assert_eq!(page1.snapshots.get(0).unwrap().epoch, 1u64);
+    assert_eq!(page1.snapshots.get(1).unwrap().epoch, 3u64);
+    assert!(page1.has_more);
+    assert_eq!(page1.next_cursor, Some(4u64));
+
+    // --- Page 2: limit=2, cursor=4 ---
+    // Iterates epochs 4..=9: skips 4, finds 5, skips 6, finds 7 -> count=2
+    // epoch 8: count >= limit -> next_cursor = Some(8), break
+    let page2 = client.get_snapshots_paginated(&2u32, &page1.next_cursor);
+    assert_eq!(page2.snapshots.len(), 2);
+    assert_eq!(page2.snapshots.get(0).unwrap().epoch, 5u64);
+    assert_eq!(page2.snapshots.get(1).unwrap().epoch, 7u64);
+    assert!(page2.has_more);
+    assert_eq!(page2.next_cursor, Some(8u64));
+
+    // --- Page 3: limit=2, cursor=8 ---
+    // Iterates epochs 8..=9: skips 8, finds 9 -> count=1, loop ends
+    let page3 = client.get_snapshots_paginated(&2u32, &page2.next_cursor);
+    assert_eq!(page3.snapshots.len(), 1);
+    assert_eq!(page3.snapshots.get(0).unwrap().epoch, 9u64);
+    assert!(!page3.has_more);
+    assert_eq!(page3.next_cursor, None);
+
+    // --- Empty contract pagination ---
+    let env2 = Env::default();
+    env2.mock_all_auths();
+    let contract_id2 = env2.register_contract(None, AnalyticsContract);
+    let client2 = AnalyticsContractClient::new(&env2, &contract_id2);
+    let admin2 = Address::generate(&env2);
+    client2.initialize(&admin2);
+
+    let empty_page = client2.get_snapshots_paginated(&10u32, &None);
+    assert_eq!(empty_page.snapshots.len(), 0);
+    assert_eq!(empty_page.total_count, 0);
+    assert!(!empty_page.has_more);
+    assert_eq!(empty_page.next_cursor, None);
     let token_admin = Address::generate(&env);
     let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token_addr = token_contract.address();
