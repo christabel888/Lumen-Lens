@@ -64,7 +64,10 @@ fn test_version_stored_on_init() {
 
     let version = client.getversion();
     assert!(!version.is_empty());
-    assert_eq!(version, soroban_sdk::String::from_str(&env, env!("CARGO_PKG_VERSION")));
+    assert_eq!(
+        version,
+        soroban_sdk::String::from_str(&env, env!("CARGO_PKG_VERSION"))
+    );
 }
 
 #[test]
@@ -402,9 +405,18 @@ fn test_batch_submit_snapshots() {
 
     assert_eq!(timestamps.len(), 3);
     assert_eq!(client.get_latest_epoch(), 3);
-    assert_eq!(client.get_snapshot(&1u64).unwrap().hash, create_test_hash(&env, 1));
-    assert_eq!(client.get_snapshot(&2u64).unwrap().hash, create_test_hash(&env, 2));
-    assert_eq!(client.get_snapshot(&3u64).unwrap().hash, create_test_hash(&env, 3));
+    assert_eq!(
+        client.get_snapshot(&1u64).unwrap().hash,
+        create_test_hash(&env, 1)
+    );
+    assert_eq!(
+        client.get_snapshot(&2u64).unwrap().hash,
+        create_test_hash(&env, 2)
+    );
+    assert_eq!(
+        client.get_snapshot(&3u64).unwrap().hash,
+        create_test_hash(&env, 3)
+    );
 }
 
 #[test]
@@ -429,8 +441,14 @@ fn test_batch_get_snapshots() {
     let results = client.batch_get_snapshots(&epochs);
 
     assert_eq!(results.len(), 3);
-    assert_eq!(results.get(0).unwrap().unwrap().hash, create_test_hash(&env, 1));
-    assert_eq!(results.get(1).unwrap().unwrap().hash, create_test_hash(&env, 2));
+    assert_eq!(
+        results.get(0).unwrap().unwrap().hash,
+        create_test_hash(&env, 1)
+    );
+    assert_eq!(
+        results.get(1).unwrap().unwrap().hash,
+        create_test_hash(&env, 2)
+    );
     assert!(results.get(2).unwrap().is_none());
 }
 
@@ -910,7 +928,11 @@ fn test_error_descriptions_are_non_empty() {
     ];
 
     for variant in variants {
-        assert!(!variant.description().is_empty(), "description missing for {:?}", variant);
+        assert!(
+            !variant.description().is_empty(),
+            "description missing for {:?}",
+            variant
+        );
         assert!(variant.code() > 0, "code must be > 0 for {:?}", variant);
     }
 }
@@ -947,7 +969,12 @@ fn test_error_codes_are_unique() {
     let mut seen: std::vec::Vec<u32> = std::vec::Vec::new();
     for variant in variants {
         let code = variant.code();
-        assert!(!seen.contains(&code), "duplicate error code {} for {:?}", code, variant);
+        assert!(
+            !seen.contains(&code),
+            "duplicate error code {} for {:?}",
+            code,
+            variant
+        );
         seen.push(code);
     }
 }

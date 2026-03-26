@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, contracterror, symbol_short, Address, Env, String,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
     Symbol, Vec,
 };
 
@@ -168,7 +168,12 @@ impl AccessControl {
         false
     }
 
-    pub fn grant_permission(env: Env, caller: Address, role: Role, function: Symbol) -> Result<(), Error> {
+    pub fn grant_permission(
+        env: Env,
+        caller: Address,
+        role: Role,
+        function: Symbol,
+    ) -> Result<(), Error> {
         caller.require_auth();
         Self::require_role(&env, &caller, Role::Admin)?;
 
@@ -583,8 +588,10 @@ mod test {
         assert!(!events.is_empty());
         // The last event should be the role_grnt event for the user grant
         // (initialize emits nothing, so only the grant_role event is present)
-        let (topics, data): (soroban_sdk::Vec<soroban_sdk::Val>, RoleGrantedEvent) =
-            events.last().map(|(_, t, d)| (t, soroban_sdk::FromVal::from_val(&env, &d))).unwrap();
+        let (topics, data): (soroban_sdk::Vec<soroban_sdk::Val>, RoleGrantedEvent) = events
+            .last()
+            .map(|(_, t, d)| (t, soroban_sdk::FromVal::from_val(&env, &d)))
+            .unwrap();
         assert_eq!(data.user, user);
         assert_eq!(data.admin, admin);
         assert!(matches!(data.role, Role::Operator));

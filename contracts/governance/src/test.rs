@@ -252,7 +252,9 @@ fn test_parameter_proposal_set_paused_execution() {
     analytics_client.initialize(&admin).unwrap();
     gov_client.initialize(&admin, &2, &1000).unwrap();
 
-    analytics_client.set_governance(&admin, &governance_id).unwrap();
+    analytics_client
+        .set_governance(&admin, &governance_id)
+        .unwrap();
 
     assert!(!analytics_client.is_paused());
 

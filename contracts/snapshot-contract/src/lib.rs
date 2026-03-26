@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, contracterror, symbol_short, Address, Bytes, BytesN, Env,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
     Map, String, Symbol,
 };
 
@@ -490,9 +490,17 @@ impl SnapshotContract {
         ContractInfo {
             metadata: Self::get_metadata(env.clone()),
             initialized: env.storage().instance().has(&DataKey::Admin),
-            paused: env.storage().instance().get(&DataKey::Paused).unwrap_or(false),
+            paused: env
+                .storage()
+                .instance()
+                .get(&DataKey::Paused)
+                .unwrap_or(false),
             admin: env.storage().instance().get(&DataKey::Admin),
-            total_snapshots: env.storage().persistent().get(&DataKey::LatestEpoch).unwrap_or(0),
+            total_snapshots: env
+                .storage()
+                .persistent()
+                .get(&DataKey::LatestEpoch)
+                .unwrap_or(0),
         }
     }
 }
@@ -715,11 +723,6 @@ mod test {
         );
         let result = client.try_submit_snapshot(&hash, &0);
         assert_eq!(result, Err(Ok(Error::InvalidEpoch)));
-    }
-
-        client.submit_snapshot(&hash1, &1);
-        let result = client.try_submit_snapshot(&hash2, &1);
-        assert_eq!(result, Err(Ok(Error::EpochAlreadyExists)));
     }
 
     #[test]

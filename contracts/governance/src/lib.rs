@@ -114,7 +114,12 @@ pub struct GovernanceContract;
 #[contractimpl]
 impl GovernanceContract {
     /// Initialize the governance contract with an admin, quorum, and voting period.
-    pub fn initialize(env: Env, admin: Address, quorum: u64, voting_period: u64) -> Result<(), errors::Error> {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        quorum: u64,
+        voting_period: u64,
+    ) -> Result<(), errors::Error> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(errors::Error::AlreadyInitialized);
         }
@@ -592,7 +597,11 @@ impl GovernanceContract {
             metadata: Self::get_metadata(env.clone()),
             initialized: env.storage().instance().has(&DataKey::Admin),
             admin: env.storage().instance().get(&DataKey::Admin),
-            total_proposals: env.storage().instance().get(&DataKey::ProposalCount).unwrap_or(0),
+            total_proposals: env
+                .storage()
+                .instance()
+                .get(&DataKey::ProposalCount)
+                .unwrap_or(0),
         }
     }
 }

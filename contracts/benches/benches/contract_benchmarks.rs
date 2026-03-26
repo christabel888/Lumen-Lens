@@ -43,7 +43,9 @@ fn bench_submit_snapshot(c: &mut Criterion) {
     c.bench_function("analytics::submit_snapshot", |b| {
         b.iter(|| {
             let hash = make_hash(&env, (epoch % 255) as u8);
-            client.submit_snapshot(black_box(&epoch), black_box(&hash), black_box(&admin)).unwrap();
+            client
+                .submit_snapshot(black_box(&epoch), black_box(&hash), black_box(&admin))
+                .unwrap();
             epoch += 1;
         })
     });
@@ -106,11 +108,9 @@ fn bench_batch_operations(c: &mut Criterion) {
                     let (client, admin) = setup_analytics(&env);
                     for epoch in 1..=size {
                         let hash = make_hash(&env, (epoch % 255) as u8);
-                        client.submit_snapshot(
-                            black_box(&epoch),
-                            black_box(&hash),
-                            black_box(&admin),
-                        ).unwrap();
+                        client
+                            .submit_snapshot(black_box(&epoch), black_box(&hash), black_box(&admin))
+                            .unwrap();
                     }
                 })
             },

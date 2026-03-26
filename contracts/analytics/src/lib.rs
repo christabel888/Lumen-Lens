@@ -183,8 +183,7 @@ fn require_admin(env: &Env) -> Result<Address, Error> {
 /// Validate epoch ordering; returns the current latest epoch on success.
 fn validate_epoch(env: &Env, epoch: u64) -> Result<u64, Error> {
     if epoch == 0 {
-        return Err(Error::InvalidEpochZero
-            .log_context(env, "validate_epoch: epoch must be > 0"));
+        return Err(Error::InvalidEpochZero.log_context(env, "validate_epoch: epoch must be > 0"));
     }
     let latest: u64 = env
         .storage()
@@ -192,12 +191,16 @@ fn validate_epoch(env: &Env, epoch: u64) -> Result<u64, Error> {
         .get(&DataKey::LatestEpoch)
         .unwrap_or(0);
     if epoch == latest {
-        return Err(Error::DuplicateEpoch
-            .log_context(env, "validate_epoch: snapshot for this epoch already exists"));
+        return Err(Error::DuplicateEpoch.log_context(
+            env,
+            "validate_epoch: snapshot for this epoch already exists",
+        ));
     }
     if epoch < latest {
-        return Err(Error::EpochMonotonicityViolated
-            .log_context(env, "validate_epoch: epoch must be strictly greater than latest"));
+        return Err(Error::EpochMonotonicityViolated.log_context(
+            env,
+            "validate_epoch: epoch must be strictly greater than latest",
+        ));
     }
     Ok(latest)
 }
@@ -282,8 +285,9 @@ impl AnalyticsContract {
             .get(&DataKey::Paused)
             .unwrap_or(false);
         if is_paused {
-            return Err(Error::ContractPaused
-                .log_context(&env, "submit_snapshot: contract is paused"));
+            return Err(
+                Error::ContractPaused.log_context(&env, "submit_snapshot: contract is paused")
+            );
         }
 
         caller.require_auth();
@@ -291,8 +295,9 @@ impl AnalyticsContract {
 
         let admin = require_admin(&env)?;
         if caller != admin {
-            return Err(Error::Unauthorized
-                .log_context(&env, "submit_snapshot: caller is not the admin"));
+            return Err(
+                Error::Unauthorized.log_context(&env, "submit_snapshot: caller is not the admin")
+            );
         }
 
         let latest = validate_epoch(&env, epoch)?;
@@ -344,8 +349,7 @@ impl AnalyticsContract {
             .get(&DataKey::Paused)
             .unwrap_or(false);
         if is_paused {
-            return Err(Error::ContractPaused
-                .log_context(&env, "batch_submit: contract is paused"));
+            return Err(Error::ContractPaused.log_context(&env, "batch_submit: contract is paused"));
         }
 
         caller.require_auth();
@@ -353,8 +357,9 @@ impl AnalyticsContract {
 
         let admin = require_admin(&env)?;
         if caller != admin {
-            return Err(Error::Unauthorized
-                .log_context(&env, "batch_submit: caller is not the admin"));
+            return Err(
+                Error::Unauthorized.log_context(&env, "batch_submit: caller is not the admin")
+            );
         }
 
         let mut snapshots: Map<u64, SnapshotMetadata> = env
@@ -476,9 +481,7 @@ impl AnalyticsContract {
                 if let Some(expires_at) = metadata.expires_at {
                     if now > expires_at {
                         snapshots.remove(epoch);
-                        env.storage()
-                            .persistent()
-                            .remove(&DataKey::Snapshot(epoch));
+                        env.storage().persistent().remove(&DataKey::Snapshot(epoch));
                         cleaned += 1;
                     }
                 }
@@ -598,16 +601,13 @@ impl AnalyticsContract {
         String::from_str(&env, VERSION)
     }
 
-    pub fn set_admin(
-        env: Env,
-        current_admin: Address,
-        new_admin: Address,
-    ) -> Result<(), Error> {
+    pub fn set_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), Error> {
         current_admin.require_auth();
         let admin = require_admin(&env)?;
         if current_admin != admin {
-            return Err(Error::Unauthorized
-                .log_context(&env, "set_admin: caller is not the current admin"));
+            return Err(
+                Error::Unauthorized.log_context(&env, "set_admin: caller is not the current admin")
+            );
         }
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         Ok(())
@@ -618,8 +618,7 @@ impl AnalyticsContract {
         caller.require_auth();
         let admin = require_admin(&env)?;
         if caller != admin {
-            return Err(Error::Unauthorized
-                .log_context(&env, "pause: caller is not the admin"));
+            return Err(Error::Unauthorized.log_context(&env, "pause: caller is not the admin"));
         }
         env.storage().instance().set(&DataKey::Paused, &true);
         env.events().publish(
@@ -639,8 +638,7 @@ impl AnalyticsContract {
         caller.require_auth();
         let admin = require_admin(&env)?;
         if caller != admin {
-            return Err(Error::Unauthorized
-                .log_context(&env, "unpause: caller is not the admin"));
+            return Err(Error::Unauthorized.log_context(&env, "unpause: caller is not the admin"));
         }
         env.storage().instance().set(&DataKey::Paused, &false);
         env.events().publish(
@@ -655,16 +653,13 @@ impl AnalyticsContract {
         Ok(())
     }
 
-    pub fn set_governance(
-        env: Env,
-        caller: Address,
-        governance: Address,
-    ) -> Result<(), Error> {
+    pub fn set_governance(env: Env, caller: Address, governance: Address) -> Result<(), Error> {
         caller.require_auth();
         let admin = require_admin(&env)?;
         if caller != admin {
-            return Err(Error::Unauthorized
-                .log_context(&env, "set_governance: caller is not the admin"));
+            return Err(
+                Error::Unauthorized.log_context(&env, "set_governance: caller is not the admin")
+            );
         }
         env.storage()
             .instance()
@@ -699,11 +694,7 @@ impl AnalyticsContract {
         Ok(())
     }
 
-    pub fn set_paused_by_governance(
-        env: Env,
-        caller: Address,
-        paused: bool,
-    ) -> Result<(), Error> {
+    pub fn set_paused_by_governance(env: Env, caller: Address, paused: bool) -> Result<(), Error> {
         let governance: Address = env
             .storage()
             .instance()
@@ -864,8 +855,7 @@ impl AnalyticsContract {
             .persistent()
             .get(&DataKey::TimelockAction(action_id))
             .ok_or_else(|| {
-                Error::ActionNotFound
-                    .log_context(&env, "execute_timelock_action: action not found")
+                Error::ActionNotFound.log_context(&env, "execute_timelock_action: action not found")
             })?;
 
         if env.ledger().timestamp() < action.executable_at {
@@ -900,11 +890,7 @@ impl AnalyticsContract {
     }
 
     /// Cancel a pending timelock action. Only the current admin can cancel.
-    pub fn cancel_timelock_action(
-        env: Env,
-        admin: Address,
-        action_id: u64,
-    ) -> Result<(), Error> {
+    pub fn cancel_timelock_action(env: Env, admin: Address, action_id: u64) -> Result<(), Error> {
         admin.require_auth();
 
         let stored_admin = require_admin(&env)?;
@@ -932,11 +918,7 @@ impl AnalyticsContract {
 
     /// Prune old snapshots, keeping only the last N epochs. Admin-only.
     /// Returns the number of snapshots removed.
-    pub fn prune_old_snapshots(
-        env: Env,
-        caller: Address,
-        keep_last_n: u32,
-    ) -> Result<u32, Error> {
+    pub fn prune_old_snapshots(env: Env, caller: Address, keep_last_n: u32) -> Result<u32, Error> {
         caller.require_auth();
         let admin = require_admin(&env)?;
         if caller != admin {
@@ -966,9 +948,7 @@ impl AnalyticsContract {
         for epoch in 1..=cutoff_epoch {
             if snapshots.contains_key(epoch) {
                 snapshots.remove(epoch);
-                env.storage()
-                    .persistent()
-                    .remove(&DataKey::Snapshot(epoch));
+                env.storage().persistent().remove(&DataKey::Snapshot(epoch));
                 removed += 1;
             }
         }
@@ -977,10 +957,8 @@ impl AnalyticsContract {
             .persistent()
             .set(&DataKey::Snapshots, &snapshots);
 
-        env.events().publish(
-            (symbol_short!("prune"), caller),
-            (removed, cutoff_epoch),
-        );
+        env.events()
+            .publish((symbol_short!("prune"), caller), (removed, cutoff_epoch));
 
         Ok(removed)
     }
@@ -1108,8 +1086,7 @@ impl AnalyticsContract {
             })?;
 
         if env.ledger().timestamp() > pending.expires_at {
-            return Err(Error::ActionExpired
-                .log_context(&env, "sign_action: action has expired"));
+            return Err(Error::ActionExpired.log_context(&env, "sign_action: action has expired"));
         }
 
         if !pending.signatures.contains(&signer) {

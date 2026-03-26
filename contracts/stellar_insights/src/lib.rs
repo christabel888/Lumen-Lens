@@ -379,9 +379,17 @@ impl StellarInsightsContract {
         ContractInfo {
             metadata: Self::get_metadata(env.clone()),
             initialized: env.storage().instance().has(&DataKey::Admin),
-            paused: env.storage().instance().get(&DataKey::Paused).unwrap_or(false),
+            paused: env
+                .storage()
+                .instance()
+                .get(&DataKey::Paused)
+                .unwrap_or(false),
             admin: env.storage().instance().get(&DataKey::Admin),
-            total_snapshots: env.storage().instance().get(&DataKey::LatestEpoch).unwrap_or(0),
+            total_snapshots: env
+                .storage()
+                .instance()
+                .get(&DataKey::LatestEpoch)
+                .unwrap_or(0),
         }
     }
 }
