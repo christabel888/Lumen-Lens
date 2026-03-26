@@ -1,10 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
-  "example-contract",
   "snapshot-contract",
   "stellar_insights",
   "analytics",
+  "benches",
+  "access-control",
   "governance",
 ]
 

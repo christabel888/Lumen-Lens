@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 #[test]
 fn test_initialize_multiple_admins_and_permissions() {
     let env = Env::default();
@@ -40,7 +42,6 @@ fn test_initialize_multiple_admins_and_permissions() {
     });
     assert!(result.is_err());
 }
-#![cfg(test)]
 
 use super::*;
 use soroban_sdk::{
