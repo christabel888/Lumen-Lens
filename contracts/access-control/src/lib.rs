@@ -1,5 +1,14 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, contracterror, symbol_short, Address, Env, Symbol, Vec,
+};
+
+#[contracterror]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum Error {
+    Unauthorized = 1,
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -64,9 +73,9 @@ impl AccessControl {
             .set(&DataKey::Roles(admin), &roles);
     }
 
-    pub fn grant_role(env: Env, caller: Address, user: Address, role: Role) {
+    pub fn grant_role(env: Env, caller: Address, user: Address, role: Role) -> Result<(), Error> {
         caller.require_auth();
-        Self::require_role(&env, &caller, Role::Admin);
+        Self::require_role(&env, &caller, Role::Admin)?;
 
         let mut roles = env
             .storage()
@@ -86,11 +95,12 @@ impl AccessControl {
                 role,
             },
         );
+        Ok(())
     }
 
-    pub fn revoke_role(env: Env, caller: Address, user: Address, role: Role) {
+    pub fn revoke_role(env: Env, caller: Address, user: Address, role: Role) -> Result<(), Error> {
         caller.require_auth();
-        Self::require_role(&env, &caller, Role::Admin);
+        Self::require_role(&env, &caller, Role::Admin)?;
 
         if let Some(roles) = env
             .storage()
@@ -116,6 +126,7 @@ impl AccessControl {
                 },
             );
         }
+        Ok(())
     }
 
     pub fn has_role(env: Env, user: Address, role: Role) -> bool {
@@ -133,9 +144,9 @@ impl AccessControl {
         false
     }
 
-    pub fn grant_permission(env: Env, caller: Address, role: Role, function: Symbol) {
+    pub fn grant_permission(env: Env, caller: Address, role: Role, function: Symbol) -> Result<(), Error> {
         caller.require_auth();
-        Self::require_role(&env, &caller, Role::Admin);
+        Self::require_role(&env, &caller, Role::Admin)?;
 
         let mut perms = env
             .storage()
@@ -155,6 +166,7 @@ impl AccessControl {
                 function,
             },
         );
+        Ok(())
     }
 
     pub fn check_permission(env: Env, user: Address, function: Symbol) -> bool {
@@ -184,10 +196,11 @@ impl AccessControl {
         false
     }
 
-    fn require_role(env: &Env, user: &Address, role: Role) {
+    fn require_role(env: &Env, user: &Address, role: Role) -> Result<(), Error> {
         if !Self::has_role(env.clone(), user.clone(), role) {
-            panic!("Unauthorized: missing required role");
+            return Err(Error::Unauthorized);
         }
+        Ok(())
     }
 
     fn roles_equal(a: &Role, b: &Role) -> bool {
@@ -201,6 +214,9 @@ impl AccessControl {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::expect_used)]
+#[allow(clippy::panic)]
 mod test {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Env};
