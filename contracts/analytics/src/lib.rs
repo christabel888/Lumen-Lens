@@ -1,4 +1,7 @@
 #![no_std]
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, Map, String,
     Vec,
@@ -125,6 +128,35 @@ pub struct TimelockAction {
 
 const TIMELOCK_DELAY: u64 = 172800; // 48 hours in seconds
 
+/// Multi-sig configuration: list of co-admins and the signing threshold.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MultiSigConfig {
+    pub admins: Vec<Address>,
+    pub threshold: u32,
+}
+
+/// An in-flight multi-sig action awaiting enough signatures.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingAction {
+    pub action_id: u64,
+    pub action_type: String,
+    pub signatures: Vec<Address>,
+    pub created_at: u64,
+    pub expires_at: u64,
+}
+
+/// Paginated result for snapshot queries (Issue #609).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedSnapshots {
+    pub snapshots: Vec<SnapshotMetadata>,
+    pub total_count: u64,
+    pub has_more: bool,
+    pub next_cursor: Option<u64>,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MultiSigConfig {
@@ -150,13 +182,16 @@ pub enum DataKey {
     Snapshot(u64),
     Paused,
     Governance,
-    /// Auto-incrementing ID counter for timelock actions
+    /// Auto-incrementing ID counter for timelock / multi-sig actions
     NextActionId,
     /// Timelock action keyed by action ID
     TimelockAction(u64),
     /// Per-caller rate limit tracking
     RateLimit(Address),
     Version,
+    /// Multi-sig admin configuration
+    MultiSigConfig,
+    /// Pending multi-sig action keyed by action ID
     MultiSigConfig,
     PendingAction(u64),
 }
@@ -573,6 +608,64 @@ impl AnalyticsContract {
         epochs
     }
 
+    /// Returns a paginated page of snapshots ordered by epoch (Issue #609).
+    ///
+    /// Iterates epoch numbers from `cursor` (or 1 if omitted) up to the latest
+    /// epoch, collecting up to `limit` snapshots that exist in storage. Gaps
+    /// caused by non-sequential epoch numbers are skipped transparently.
+    ///
+    /// # Arguments
+    /// * `limit`  - Maximum number of snapshots to include in this page.
+    /// * `cursor` - First epoch to consider (inclusive). Pass `None` to start
+    ///              from the very beginning (epoch 1).
+    ///
+    /// # Returns
+    /// `PaginatedSnapshots` with:
+    /// * `snapshots`    – The collected page of metadata.
+    /// * `total_count`  – The latest epoch number (upper bound on total snapshots).
+    /// * `has_more`     – `true` when more results exist beyond this page.
+    /// * `next_cursor`  – Pass this as `cursor` in the next call; `None` when exhausted.
+    pub fn get_snapshots_paginated(
+        env: Env,
+        limit: u32,
+        cursor: Option<u64>,
+    ) -> PaginatedSnapshots {
+        let snapshots: Map<u64, SnapshotMetadata> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Snapshots)
+            .unwrap_or_else(|| Map::new(&env));
+
+        let start_epoch = cursor.unwrap_or(1);
+        let latest_epoch: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LatestEpoch)
+            .unwrap_or(0);
+
+        let mut results = Vec::new(&env);
+        let mut count = 0u32;
+        let mut next_cursor: Option<u64> = None;
+
+        for epoch in start_epoch..=latest_epoch {
+            if count >= limit {
+                next_cursor = Some(epoch);
+                break;
+            }
+            if let Some(metadata) = snapshots.get(epoch) {
+                results.push_back(metadata);
+                count += 1;
+            }
+        }
+
+        PaginatedSnapshots {
+            snapshots: results,
+            total_count: latest_epoch,
+            has_more: next_cursor.is_some(),
+            next_cursor,
+        }
+    }
+
     pub fn get_admin(env: Env) -> Option<Address> {
         env.storage().instance().get(&DataKey::Admin)
     }
@@ -924,6 +1017,8 @@ impl AnalyticsContract {
             panic!("Unauthorized: only the admin can initialize multisig");
         }
 
+        if threshold == 0 || threshold > admins.len() as u32 {
+            panic!("Invalid threshold: must be between 1 and the number of admins");
         if threshold == 0 || threshold > admins.len() {
             panic!("Invalid threshold: must be > 0 and <= number of admins");
         }
@@ -1028,37 +1123,57 @@ impl AnalyticsContract {
             .get(&DataKey::PendingAction(action_id))
     }
 
-    /// Emergency withdrawal of tokens from the contract.
-    /// Only the admin can call this, and the contract must be paused.
-    pub fn emergency_withdraw(
-        env: Env,
-        admin: Address,
-        token_addr: Address,
-        amount: i128,
-        recipient: Address,
-    ) {
-        admin.require_auth();
-        let stored_admin = require_admin(&env);
-        if admin != stored_admin {
-            panic!("Unauthorized: only the admin can perform emergency withdrawal");
+    // =========================================================================
+    // Contract Metadata
+    // =========================================================================
+
+    /// Extended contract metadata for public disclosure
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct PublicMetadata {
+        pub name: String,
+        pub version: String,
+        pub author: String,
+        pub description: String,
+        pub repository: String,
+        pub license: String,
+    }
+
+    /// Contract info combining metadata with runtime state
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct ContractInfo {
+        pub metadata: PublicMetadata,
+        pub initialized: bool,
+        pub paused: bool,
+        pub admin: Option<Address>,
+        pub total_snapshots: u64,
+    }
+
+    /// Get public contract metadata
+    pub fn get_metadata(env: Env) -> PublicMetadata {
+        PublicMetadata {
+            name: String::from_str(&env, "Stellar Insights Analytics"),
+            version: String::from_str(&env, VERSION),
+            author: String::from_str(&env, "Stellar Insights Team"),
+            description: String::from_str(
+                &env,
+                "Advanced analytics and data aggregation contract for Stellar network",
+            ),
+            repository: String::from_str(&env, "https://github.com/stellar-insights/contracts"),
+            license: String::from_str(&env, "MIT"),
         }
+    }
 
-        let paused: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Paused)
-            .unwrap_or(false);
-        if !paused {
-            panic!("Contract must be paused for emergency withdrawal");
+    /// Get comprehensive contract information
+    pub fn get_contract_info(env: Env) -> ContractInfo {
+        ContractInfo {
+            metadata: Self::get_metadata(env.clone()),
+            initialized: env.storage().instance().has(&DataKey::Admin),
+            paused: env.storage().instance().get(&DataKey::Paused).unwrap_or(false),
+            admin: env.storage().instance().get(&DataKey::Admin),
+            total_snapshots: env.storage().instance().get(&DataKey::LatestEpoch).unwrap_or(0),
         }
-
-        let token_client = token::Client::new(&env, &token_addr);
-        token_client.transfer(&env.current_contract_address(), &recipient, &amount);
-
-        env.events().publish(
-            (symbol_short!("emergency"), admin),
-            (token_addr, amount, recipient),
-        );
     }
 }
 

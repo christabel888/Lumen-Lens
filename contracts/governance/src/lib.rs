@@ -1,5 +1,3 @@
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 #![no_std]
 
 mod errors;
@@ -80,7 +78,6 @@ pub enum DataKey {
     VoteTally(u64),
     /// Parameter-update action for a proposal (when present, proposal is parameter type).
     ParameterAction(u64),
-    Version,
 }
 
 // ============================================================================
@@ -93,9 +90,9 @@ pub struct GovernanceContract;
 #[contractimpl]
 impl GovernanceContract {
     /// Initialize the governance contract with an admin, quorum, and voting period.
-    pub fn initialize(env: Env, admin: Address, quorum: u64, voting_period: u64) {
+    pub fn initialize(env: Env, admin: Address, quorum: u64, voting_period: u64) -> Result<(), errors::Error> {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Contract already initialized");
+            return Err(errors::Error::AlreadyInitialized);
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -104,7 +101,7 @@ impl GovernanceContract {
         env.storage()
             .instance()
             .set(&DataKey::VotingPeriod, &voting_period);
-        env.storage().instance().set(&DataKey::Version, &VERSION);
+        Ok(())
     }
 
     /// Create a new governance proposal. Only the admin can create proposals.
@@ -544,6 +541,57 @@ impl GovernanceContract {
 
     pub fn getversion(env: Env) -> String {
         String::from_str(&env, VERSION)
+    }
+
+    // =========================================================================
+    // Contract Metadata
+    // =========================================================================
+
+    /// Extended contract metadata for public disclosure
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct PublicMetadata {
+        pub name: String,
+        pub version: String,
+        pub author: String,
+        pub description: String,
+        pub repository: String,
+        pub license: String,
+    }
+
+    /// Contract info combining metadata with runtime state
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct ContractInfo {
+        pub metadata: PublicMetadata,
+        pub initialized: bool,
+        pub admin: Option<Address>,
+        pub total_proposals: u64,
+    }
+
+    /// Get public contract metadata
+    pub fn get_metadata(env: Env) -> PublicMetadata {
+        PublicMetadata {
+            name: String::from_str(&env, "Stellar Insights Governance"),
+            version: String::from_str(&env, VERSION),
+            author: String::from_str(&env, "Stellar Insights Team"),
+            description: String::from_str(
+                &env,
+                "Decentralized governance and voting contract for Stellar Insights",
+            ),
+            repository: String::from_str(&env, "https://github.com/stellar-insights/contracts"),
+            license: String::from_str(&env, "MIT"),
+        }
+    }
+
+    /// Get comprehensive contract information
+    pub fn get_contract_info(env: Env) -> ContractInfo {
+        ContractInfo {
+            metadata: Self::get_metadata(env.clone()),
+            initialized: env.storage().instance().has(&DataKey::Admin),
+            admin: env.storage().instance().get(&DataKey::Admin),
+            total_proposals: env.storage().instance().get(&DataKey::ProposalCount).unwrap_or(0),
+        }
     }
 }
 

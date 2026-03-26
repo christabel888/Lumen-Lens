@@ -1,5 +1,3 @@
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 #![no_std]
 
 mod errors;
@@ -7,7 +5,7 @@ mod events;
 
 use errors::Error;
 use events::emit_snapshot_submitted;
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Map, String};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Map};
 
 /// Storage keys for persistent contract data
 #[contracttype]
@@ -21,7 +19,6 @@ pub enum DataKey {
     LatestEpoch,
     /// Emergency pause state (true = paused, false = active)
     Paused,
-    Version,
 }
 
 /// Analytics snapshot data structure
@@ -49,10 +46,10 @@ impl StellarInsightsContract {
     ///
     /// # Returns
     /// * Success confirmation
-    pub fn initialize(env: Env, admin: Address) {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
         // Verify admin doesn't already exist to prevent re-initialization
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Contract already initialized");
+            return Err(Error::AlreadyInitialized);
         }
 
         // Store the admin address
@@ -63,9 +60,7 @@ impl StellarInsightsContract {
 
         // Initialize contract as not paused
         env.storage().instance().set(&DataKey::Paused, &false);
-
-        // Store version
-        env.storage().instance().set(&DataKey::Version, &VERSION);
+        Ok(())
     }
 
     /// Submit a cryptographic hash of an analytics snapshot on-chain
@@ -264,10 +259,6 @@ impl StellarInsightsContract {
             .unwrap_or(0)
     }
 
-    pub fn getversion(env: Env) -> String {
-        String::from_str(&env, VERSION)
-    }
-
     /// Emergency pause the contract
     ///
     /// Pauses all snapshot submissions. Only the admin can pause the contract.
@@ -337,6 +328,59 @@ impl StellarInsightsContract {
             .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false)
+    }
+
+    // =========================================================================
+    // Contract Metadata
+    // =========================================================================
+
+    /// Extended contract metadata for public disclosure
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct PublicMetadata {
+        pub name: String,
+        pub version: String,
+        pub author: String,
+        pub description: String,
+        pub repository: String,
+        pub license: String,
+    }
+
+    /// Contract info combining metadata with runtime state
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct ContractInfo {
+        pub metadata: PublicMetadata,
+        pub initialized: bool,
+        pub paused: bool,
+        pub admin: Option<Address>,
+        pub total_snapshots: u64,
+    }
+
+    /// Get public contract metadata
+    pub fn get_metadata(env: Env) -> PublicMetadata {
+        PublicMetadata {
+            name: String::from_str(&env, "Stellar Insights Core"),
+            version: String::from_str(&env, VERSION),
+            author: String::from_str(&env, "Stellar Insights Team"),
+            description: String::from_str(
+                &env,
+                "Core analytics snapshot contract for Stellar network",
+            ),
+            repository: String::from_str(&env, "https://github.com/stellar-insights/contracts"),
+            license: String::from_str(&env, "MIT"),
+        }
+    }
+
+    /// Get comprehensive contract information
+    pub fn get_contract_info(env: Env) -> ContractInfo {
+        ContractInfo {
+            metadata: Self::get_metadata(env.clone()),
+            initialized: env.storage().instance().has(&DataKey::Admin),
+            paused: env.storage().instance().get(&DataKey::Paused).unwrap_or(false),
+            admin: env.storage().instance().get(&DataKey::Admin),
+            total_snapshots: env.storage().instance().get(&DataKey::LatestEpoch).unwrap_or(0),
+        }
     }
 }
 
