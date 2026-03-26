@@ -1,5 +1,4 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Map, Vec};
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 #[contracttype]
@@ -56,9 +55,9 @@ fn emit_error_event(
 
 const DEFAULT_SNAPSHOT_TTL: u64 = 7_776_000; // 90 days in seconds
 const LEDGER_SECONDS: u64 = 5; // ~5 seconds per ledger
-
 const RATE_LIMIT_WINDOW: u64 = 3600; // 1 hour
 const MAX_CALLS_PER_WINDOW: u32 = 100;
+const TIMELOCK_DELAY: u64 = 172800; // 48 hours in seconds
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -119,7 +118,15 @@ pub struct TimelockAction {
     pub executed: bool,
 }
 
-const TIMELOCK_DELAY: u64 = 172800; // 48 hours in seconds
+/// Paginated result for snapshot queries (Issue #609).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedSnapshots {
+    pub snapshots: Vec<SnapshotMetadata>,
+    pub total_count: u64,
+    pub has_more: bool,
+    pub next_cursor: Option<u64>,
+}
 
 #[contracttype]
 pub enum DataKey {
@@ -139,7 +146,6 @@ pub enum DataKey {
 
 fn check_rate_limit(env: &Env, caller: &Address) {
     let now = env.ledger().timestamp();
-
     let mut rate_info: RateLimitInfo = env
         .storage()
         .temporary()
@@ -161,13 +167,10 @@ fn check_rate_limit(env: &Env, caller: &Address) {
 
     rate_info.call_count += 1;
     rate_info.last_call = now;
-
     env.storage()
         .temporary()
         .set(&DataKey::RateLimit(caller.clone()), &rate_info);
 }
-
-// ── Private helpers ──────────────────────────────────────────────────────────
 
 /// Read the admin address; panics if the contract is not initialized.
 fn require_admin(env: &Env) -> Address {
@@ -177,7 +180,7 @@ fn require_admin(env: &Env) -> Address {
         .unwrap_or_else(|| panic!("Contract not initialized: admin not set"))
 }
 
-/// Validate epoch ordering and return the current latest epoch.
+/// Validate epoch ordering; returns the current latest epoch.
 fn validate_epoch(env: &Env, epoch: u64) -> u64 {
     if epoch == 0 {
         panic!("Invalid epoch: must be greater than 0");
@@ -200,7 +203,6 @@ fn validate_epoch(env: &Env, epoch: u64) -> u64 {
 }
 
 /// Write one snapshot to per-epoch persistent storage and update the shared map + latest epoch.
-/// `snapshots` is the already-loaded shared map (passed in to avoid a redundant read).
 fn write_snapshot(
     env: &Env,
     epoch: u64,
@@ -211,15 +213,13 @@ fn write_snapshot(
     env.storage()
         .persistent()
         .set(&DataKey::Snapshot(epoch), metadata);
-    // Shared map — kept for get_snapshot_history / get_all_epochs
+    // Shared map — kept for get_snapshot_history / get_all_epochs / get_snapshots_paginated
     snapshots.set(epoch, metadata.clone());
     env.storage()
         .persistent()
         .set(&DataKey::Snapshots, snapshots);
     env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
 }
-
-// ── Contract ─────────────────────────────────────────────────────────────────
 
 #[contract]
 pub struct AnalyticsContract;
@@ -242,12 +242,10 @@ impl AnalyticsContract {
 
     /// Submit a single snapshot. Panics on invalid input or unauthorized caller.
     pub fn submit_snapshot(env: Env, epoch: u64, hash: BytesN<32>, caller: Address) -> u64 {
-        if env
+        let is_paused: bool = env
             .storage()
             .instance()
             .get(&DataKey::Paused)
-            .unwrap_or(false)
-        {
             .unwrap_or(false);
         if is_paused {
             emit_error_event(
@@ -259,19 +257,11 @@ impl AnalyticsContract {
             );
             panic!("Contract is paused for emergency maintenance");
         }
-        caller.require_auth();
-        let admin = require_admin(&env);
 
-        // Enforce rate limit
+        caller.require_auth();
         check_rate_limit(&env, &caller);
 
-        // Verify caller is the authorized admin
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Contract not initialized: admin not set");
-
+        let admin = require_admin(&env);
         if caller != admin {
             emit_error_event(
                 &env,
@@ -282,7 +272,6 @@ impl AnalyticsContract {
             );
             panic!("Unauthorized: only the admin can submit snapshots");
         }
-        validate_epoch(&env, epoch);
 
         if epoch == 0 {
             emit_error_event(
@@ -301,37 +290,35 @@ impl AnalyticsContract {
             .get(&DataKey::LatestEpoch)
             .unwrap_or(0);
 
-        if epoch <= latest {
-            if epoch == latest {
-                emit_error_event(
-                    &env,
-                    ContractError::EpochAlreadyExists,
-                    "submit_snapshot",
-                    &caller,
-                    "Snapshot for this epoch already exists",
-                );
-                panic!("Snapshot for epoch {} already exists", epoch);
-            } else {
-                emit_error_event(
-                    &env,
-                    ContractError::EpochMonotonicityViolated,
-                    "submit_snapshot",
-                    &caller,
-                    "Epoch must be strictly greater than the latest epoch",
-                );
-                panic!(
-                    "Epoch monotonicity violated: epoch {} must be strictly greater than latest {}",
-                    epoch, latest
-                );
-            }
+        if epoch == latest {
+            emit_error_event(
+                &env,
+                ContractError::EpochAlreadyExists,
+                "submit_snapshot",
+                &caller,
+                "Snapshot for this epoch already exists",
+            );
+            panic!("Snapshot for epoch {} already exists", epoch);
+        }
+
+        if epoch < latest {
+            emit_error_event(
+                &env,
+                ContractError::EpochMonotonicityViolated,
+                "submit_snapshot",
+                &caller,
+                "Epoch must be strictly greater than the latest epoch",
+            );
+            panic!(
+                "Epoch monotonicity violated: epoch {} must be strictly greater than latest {}",
+                epoch, latest
+            );
         }
 
         let timestamp = env.ledger().timestamp();
-        let ledger_sequence = env.ledger().sequence();
         let metadata = SnapshotMetadata {
             epoch,
             timestamp,
-            hash: hash.clone(),
             hash,
             submitter: caller,
             ledger_sequence: env.ledger().sequence(),
@@ -346,79 +333,7 @@ impl AnalyticsContract {
         timestamp
     }
 
-    /// Submit a batch of snapshots in a single call (single auth + admin check).
-    /// Epochs must be provided in strictly increasing order.
-    /// Returns a Vec of timestamps, one per submitted snapshot.
-    pub fn batch_submit(
-        env: Env,
-        snapshots_input: Vec<(u64, BytesN<32>)>,
-        caller: Address,
-    ) -> Vec<u64> {
-        if env
-            .storage()
-            .instance()
-            .get(&DataKey::Paused)
-            .unwrap_or(false)
-        {
-            panic!("Contract is paused for emergency maintenance");
-        }
-        caller.require_auth();
-        let admin = require_admin(&env);
-        if caller != admin {
-            panic!("Unauthorized: only the admin can submit snapshots");
-        }
-
-        let mut snapshots: Map<u64, SnapshotMetadata> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Snapshots)
-            .unwrap_or_else(|| Map::new(&env));
-        // Defense-in-depth: explicitly prevent overwriting an existing snapshot
-        if snapshots.contains_key(epoch) {
-            emit_error_event(
-                &env,
-                ContractError::SnapshotImmutabilityViolated,
-                "submit_snapshot",
-                &caller,
-                "Epoch already exists in storage",
-            );
-            panic!("Snapshot immutability violated: epoch {} already exists in storage", epoch);
-            panic!(
-                "Snapshot immutability violated: epoch {} already exists in storage",
-                epoch
-            );
-        }
-
-        snapshots.set(epoch, metadata.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::Snapshots, &snapshots);
-        env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
-
-        // Also store per-epoch key for TTL management
-        env.storage()
-            .persistent()
-            .set(&DataKey::Snapshot(epoch), &metadata);
-
-        let mut results = Vec::new(&env);
-        for (epoch, hash) in snapshots_input.iter() {
-            validate_epoch(&env, epoch);
-            let timestamp = env.ledger().timestamp();
-            let metadata = SnapshotMetadata {
-                epoch,
-                timestamp,
-                hash,
-                submitter: caller.clone(),
-                ledger_sequence: env.ledger().sequence(),
-                expires_at: None,
-            };
-            write_snapshot(&env, epoch, &metadata, &mut snapshots);
-            results.push_back(timestamp);
-        }
-        results
-    }
-
-    /// Submit a snapshot with an optional TTL (defaults to 90 days).
+    /// Submit a snapshot with an explicit or default TTL.
     pub fn submit_snapshot_with_ttl(
         env: Env,
         epoch: u64,
@@ -427,20 +342,13 @@ impl AnalyticsContract {
         ttl_seconds: Option<u64>,
     ) -> u64 {
         caller.require_auth();
-        let admin = require_admin(&env);
-
-        // Enforce rate limit
         check_rate_limit(&env, &caller);
 
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Contract not initialized: admin not set");
-
+        let admin = require_admin(&env);
         if caller != admin {
             panic!("Unauthorized: only the admin can submit snapshots");
         }
+
         validate_epoch(&env, epoch);
 
         let timestamp = env.ledger().timestamp();
@@ -461,49 +369,265 @@ impl AnalyticsContract {
             .unwrap_or_else(|| Map::new(&env));
         write_snapshot(&env, epoch, &metadata, &mut snapshots);
 
+        // Extend per-epoch Soroban storage TTL
         let ledgers_to_live = (ttl / LEDGER_SECONDS) as u32;
-        snapshots.set(epoch, metadata.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::Snapshots, &snapshots);
-        env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
-
-        env.events().publish(
-            (symbol_short!("snapshot"), caller.clone()),
-            SnapshotSubmittedEvent {
-                epoch,
-                hash,
-                submitter: caller,
-                timestamp,
-                previous_epoch: latest,
-                ledger_sequence,
-            },
-        // Store per-epoch key and set Soroban storage TTL
-        let ledgers_to_live = (ttl / LEDGER_SECONDS) as u32;
-        env.storage()
-            .persistent()
-            .set(&DataKey::Snapshot(epoch), &metadata);
         env.storage().persistent().extend_ttl(
             &DataKey::Snapshot(epoch),
             ledgers_to_live,
             ledgers_to_live,
         );
+
         timestamp
     }
 
-    /// Get snapshot by epoch — reads the cheap per-epoch key, not the full map.
+    /// Batch submit — snapshots_input first, caller second.
+    pub fn batch_submit(
+        env: Env,
+        snapshots_input: Vec<(u64, BytesN<32>)>,
+        caller: Address,
+    ) -> Vec<u64> {
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            panic!("Contract is paused for emergency maintenance");
+        }
+
+        caller.require_auth();
+        let admin = require_admin(&env);
+        if caller != admin {
+            panic!("Unauthorized: only the admin can submit snapshots");
+        }
+
+        let mut snapshots: Map<u64, SnapshotMetadata> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Snapshots)
+            .unwrap_or_else(|| Map::new(&env));
+        let mut results = Vec::new(&env);
+
+        for (epoch, hash) in snapshots_input.iter() {
+            validate_epoch(&env, epoch);
+            let timestamp = env.ledger().timestamp();
+            let metadata = SnapshotMetadata {
+                epoch,
+                timestamp,
+                hash,
+                submitter: caller.clone(),
+                ledger_sequence: env.ledger().sequence(),
+                expires_at: None,
+            };
+            write_snapshot(&env, epoch, &metadata, &mut snapshots);
+            results.push_back(timestamp);
+        }
+
+        results
+    }
+
+    /// Batch submit — caller first, snapshots second.
+    pub fn batch_submit_snapshots(
+        env: Env,
+        caller: Address,
+        snapshots: Vec<(u64, BytesN<32>)>,
+    ) -> Vec<u64> {
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            panic!("Contract is paused for emergency maintenance");
+        }
+
+        caller.require_auth();
+        let admin = require_admin(&env);
+        if caller != admin {
+            panic!("Unauthorized: only the admin can submit snapshots");
+        }
+
+        let mut snapshots_map: Map<u64, SnapshotMetadata> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Snapshots)
+            .unwrap_or_else(|| Map::new(&env));
+        let mut results = Vec::new(&env);
+
+        for (epoch, hash) in snapshots.iter() {
+            if epoch == 0 {
+                panic!("Invalid epoch: must be greater than 0");
+            }
+            let latest: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::LatestEpoch)
+                .unwrap_or(0);
+            if epoch <= latest {
+                panic!(
+                    "Epoch monotonicity violated: epoch must be strictly greater than latest"
+                );
+            }
+            if snapshots_map.contains_key(epoch) {
+                panic!(
+                    "Snapshot immutability violated: epoch already exists in storage"
+                );
+            }
+
+            let timestamp = env.ledger().timestamp();
+            let metadata = SnapshotMetadata {
+                epoch,
+                timestamp,
+                hash,
+                submitter: caller.clone(),
+                ledger_sequence: env.ledger().sequence(),
+                expires_at: None,
+            };
+            write_snapshot(&env, epoch, &metadata, &mut snapshots_map);
+            results.push_back(timestamp);
+        }
+
+        env.events()
+            .publish((symbol_short!("batch"), caller), snapshots.len());
+
+        results
+    }
+
+    /// Batch get multiple snapshots by epoch in a single call.
+    pub fn batch_get_snapshots(env: Env, epochs: Vec<u64>) -> Vec<Option<SnapshotMetadata>> {
+        let snapshots: Map<u64, SnapshotMetadata> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Snapshots)
+            .unwrap_or_else(|| Map::new(&env));
+
+        let mut results = Vec::new(&env);
+        for epoch in epochs.iter() {
+            results.push_back(snapshots.get(epoch));
+        }
+        results
+    }
+
+    /// Get snapshot metadata for a specific epoch via the cheap per-epoch key.
+    pub fn get_snapshot(env: Env, epoch: u64) -> Option<SnapshotMetadata> {
+        env.storage().persistent().get(&DataKey::Snapshot(epoch))
+    }
+
+    pub fn get_latest_snapshot(env: Env) -> Option<SnapshotMetadata> {
+        let latest_epoch: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LatestEpoch)
+            .unwrap_or(0);
+        if latest_epoch == 0 {
+            return None;
+        }
+        env.storage()
+            .persistent()
+            .get(&DataKey::Snapshot(latest_epoch))
+    }
+
+    pub fn get_snapshot_history(env: Env) -> Map<u64, SnapshotMetadata> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Snapshots)
+            .unwrap_or_else(|| Map::new(&env))
+    }
+
+    pub fn get_latest_epoch(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::LatestEpoch)
+            .unwrap_or(0)
+    }
+
+    pub fn get_all_epochs(env: Env) -> Vec<u64> {
+        let snapshots = Self::get_snapshot_history(env.clone());
+        let mut epochs = Vec::new(&env);
+        for (epoch, _) in snapshots.iter() {
+            epochs.push_back(epoch);
+        }
+        epochs
+    }
+
+    /// Returns a paginated page of snapshots ordered by epoch.
+    ///
+    /// Iterates epoch numbers from `cursor` (or 1 if omitted) up to the latest
+    /// epoch, collecting up to `limit` snapshots that exist in storage. Gaps
+    /// caused by non-sequential epoch numbers are skipped transparently.
+    ///
+    /// # Arguments
+    /// * `limit`  - Maximum number of snapshots to include in this page.
+    /// * `cursor` - First epoch to consider (inclusive). Pass `None` to start
+    ///              from the very beginning (epoch 1).
+    ///
+    /// # Returns
+    /// `PaginatedSnapshots` with:
+    /// * `snapshots`    – The collected page of metadata.
+    /// * `total_count`  – The latest epoch number (upper bound on total snapshots).
+    /// * `has_more`     – `true` when more results exist beyond this page.
+    /// * `next_cursor`  – Pass this value as `cursor` in the next call to
+    ///                    retrieve the following page; `None` when exhausted.
+    pub fn get_snapshots_paginated(
+        env: Env,
+        limit: u32,
+        cursor: Option<u64>,
+    ) -> PaginatedSnapshots {
+        let snapshots: Map<u64, SnapshotMetadata> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Snapshots)
+            .unwrap_or_else(|| Map::new(&env));
+
+        let start_epoch = cursor.unwrap_or(1);
+        let latest_epoch: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LatestEpoch)
+            .unwrap_or(0);
+
+        let mut results = Vec::new(&env);
+        let mut count = 0u32;
+        let mut next_cursor: Option<u64> = None;
+
+        for epoch in start_epoch..=latest_epoch {
+            if count >= limit {
+                next_cursor = Some(epoch);
+                break;
+            }
+            if let Some(metadata) = snapshots.get(epoch) {
+                results.push_back(metadata);
+                count += 1;
+            }
+        }
+
+        PaginatedSnapshots {
+            snapshots: results,
+            total_count: latest_epoch,
+            has_more: next_cursor.is_some(),
+            next_cursor,
+        }
+    }
+
+    pub fn get_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::Admin)
+    }
+
+    pub fn set_admin(env: Env, current_admin: Address, new_admin: Address) {
+        current_admin.require_auth();
+        let admin = require_admin(&env);
+        if current_admin != admin {
+            panic!("Unauthorized: only the current admin can set a new admin");
+        }
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+    }
+
     /// Remove expired snapshots from the shared map.
     /// Admin-only. Iterates up to `max_to_clean` epochs and removes those past expiry.
     /// Returns the number of snapshots cleaned.
     pub fn cleanup_expired_snapshots(env: Env, admin: Address, max_to_clean: u32) -> u32 {
         admin.require_auth();
-
-        let stored_admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Contract not initialized: admin not set");
-
+        let stored_admin = require_admin(&env);
         if admin != stored_admin {
             panic!("Unauthorized: only the admin can clean up snapshots");
         }
@@ -546,140 +670,6 @@ impl AnalyticsContract {
 
     /// Check whether a snapshot has expired.
     pub fn is_snapshot_expired(env: Env, epoch: u64) -> bool {
-        let snapshots: Map<u64, SnapshotMetadata> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Snapshots)
-            .unwrap_or_else(|| Map::new(&env));
-
-        match snapshots.get(epoch) {
-            Some(metadata) => match metadata.expires_at {
-                Some(expires_at) => env.ledger().timestamp() > expires_at,
-                None => false,
-            },
-            None => false,
-        }
-    }
-
-    /// Get snapshot metadata for a specific epoch
-    ///
-    /// # Arguments
-    /// * `env` - Contract environment
-    /// * `epoch` - Epoch to retrieve
-    ///
-    /// # Returns
-    /// * Snapshot metadata for the epoch, or None if not found
-    pub fn get_snapshot(env: Env, epoch: u64) -> Option<SnapshotMetadata> {
-        env.storage().persistent().get(&DataKey::Snapshot(epoch))
-    }
-
-    pub fn get_latest_snapshot(env: Env) -> Option<SnapshotMetadata> {
-        let latest_epoch: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::LatestEpoch)
-            .unwrap_or(0);
-        if latest_epoch == 0 {
-            return None;
-        }
-        env.storage()
-            .persistent()
-            .get(&DataKey::Snapshot(latest_epoch))
-    }
-
-    pub fn get_snapshot_history(env: Env) -> Map<u64, SnapshotMetadata> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Snapshots)
-            .unwrap_or_else(|| Map::new(&env))
-    }
-
-    pub fn get_latest_epoch(env: Env) -> u64 {
-        env.storage()
-            .instance()
-            .get(&DataKey::LatestEpoch)
-            .unwrap_or(0)
-    }
-
-    pub fn get_all_epochs(env: Env) -> soroban_sdk::Vec<u64> {
-        let snapshots = Self::get_snapshot_history(env.clone());
-        let mut epochs = soroban_sdk::Vec::new(&env);
-        for (epoch, _) in snapshots.iter() {
-            epochs.push_back(epoch);
-        }
-        epochs
-    }
-
-    pub fn get_admin(env: Env) -> Option<Address> {
-        env.storage().instance().get(&DataKey::Admin)
-    }
-
-    pub fn set_admin(env: Env, current_admin: Address, new_admin: Address) {
-        current_admin.require_auth();
-        let admin = require_admin(&env);
-        if current_admin != admin {
-            panic!("Unauthorized: only the current admin can set a new admin");
-        }
-        env.storage().instance().set(&DataKey::Admin, &new_admin);
-    }
-
-    pub fn cleanup_expired_snapshots(env: Env, admin: Address, max_to_clean: u32) -> u32 {
-        admin.require_auth();
-        let stored_admin = require_admin(&env);
-        if admin != stored_admin {
-            panic!("Unauthorized: only the admin can clean up snapshots");
-        }
-    /// Emergency pause the contract
-    ///
-    /// Pauses all snapshot submissions. Only the admin can pause the contract.
-    /// Read operations remain available during pause.
-    ///
-    /// # Arguments
-    /// * `env` - Contract environment
-    /// * `caller` - Address attempting to pause (must be admin)
-    ///
-    /// # Panics
-    /// * If contract is not initialized (admin not set)
-    /// * If caller is not the admin
-    pub fn pause(env: Env, caller: Address, reason: String) {
-        caller.require_auth();
-
-        let now = env.ledger().timestamp();
-        let mut cleaned = 0u32;
-        let latest_epoch: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::LatestEpoch)
-            .unwrap_or(0);
-
-        let mut snapshots: Map<u64, SnapshotMetadata> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Snapshots)
-            .unwrap_or_else(|| Map::new(&env));
-
-        for epoch in 1..=latest_epoch {
-            if cleaned >= max_to_clean {
-                break;
-            }
-            if let Some(metadata) = snapshots.get(epoch) {
-                if let Some(expires_at) = metadata.expires_at {
-                    if now > expires_at {
-                        snapshots.remove(epoch);
-                        env.storage().persistent().remove(&DataKey::Snapshot(epoch));
-                        cleaned += 1;
-                    }
-                }
-            }
-        }
-
-        env.storage()
-            .persistent()
-            .set(&DataKey::Snapshots, &snapshots);
-        cleaned
-    }
-
-    pub fn is_snapshot_expired(env: Env, epoch: u64) -> bool {
         match env
             .storage()
             .persistent()
@@ -693,14 +683,14 @@ impl AnalyticsContract {
         }
     }
 
-    pub fn pause(env: Env, caller: Address) {
+    /// Emergency pause — halts all snapshot submissions.
+    pub fn pause(env: Env, caller: Address, reason: String) {
         caller.require_auth();
         let admin = require_admin(&env);
         if caller != admin {
             panic!("Unauthorized: only the admin can pause the contract");
         }
         env.storage().instance().set(&DataKey::Paused, &true);
-
         env.events().publish(
             (symbol_short!("pause"), caller.clone()),
             PauseEvent {
@@ -712,18 +702,7 @@ impl AnalyticsContract {
         );
     }
 
-    pub fn unpause(env: Env, caller: Address) {
-    /// Unpause the contract
-    ///
-    /// Resumes normal operations. Only the admin can unpause the contract.
-    ///
-    /// # Arguments
-    /// * `env` - Contract environment
-    /// * `caller` - Address attempting to unpause (must be admin)
-    ///
-    /// # Panics
-    /// * If contract is not initialized (admin not set)
-    /// * If caller is not the admin
+    /// Resume normal operations after a pause.
     pub fn unpause(env: Env, caller: Address, reason: String) {
         caller.require_auth();
         let admin = require_admin(&env);
@@ -731,7 +710,6 @@ impl AnalyticsContract {
             panic!("Unauthorized: only the admin can unpause the contract");
         }
         env.storage().instance().set(&DataKey::Paused, &false);
-
         env.events().publish(
             (symbol_short!("unpause"), caller.clone()),
             UnpauseEvent {
@@ -782,116 +760,7 @@ impl AnalyticsContract {
         env.storage().instance().set(&DataKey::Paused, &paused);
     }
 
-    /// Batch submit multiple snapshots in a single transaction.
-    /// Epochs must be strictly increasing within the batch and relative to the current latest.
-    ///
-    /// # Arguments
-    /// * `env` - Contract environment
-    /// * `caller` - Address attempting to submit (must be the authorized admin)
-    /// * `snapshots` - Vector of (epoch, hash) pairs to submit
-    ///
-    /// # Returns
-    /// * Vector of ledger timestamps for each submitted snapshot
-    pub fn batch_submit_snapshots(
-        env: Env,
-        caller: Address,
-        snapshots: Vec<(u64, BytesN<32>)>,
-    ) -> Vec<u64> {
-        let is_paused: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Paused)
-            .unwrap_or(false);
-        if is_paused {
-            panic!("Contract is paused for emergency maintenance");
-        }
-
-        caller.require_auth();
-
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Contract not initialized: admin not set");
-
-        if caller != admin {
-            panic!("Unauthorized: only the admin can submit snapshots");
-        }
-
-        let mut timestamps = Vec::new(&env);
-        let mut snapshots_map: Map<u64, SnapshotMetadata> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Snapshots)
-            .unwrap_or_else(|| Map::new(&env));
-        let mut latest: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::LatestEpoch)
-            .unwrap_or(0);
-
-        for (epoch, hash) in snapshots.iter() {
-            if epoch == 0 {
-                panic!("Invalid epoch: must be greater than 0");
-            }
-            if epoch <= latest {
-                panic!("Epoch monotonicity violated: epoch must be strictly greater than latest");
-            }
-            if snapshots_map.contains_key(epoch) {
-                panic!("Snapshot immutability violated: epoch already exists in storage");
-            }
-
-            let timestamp = env.ledger().timestamp();
-            snapshots_map.set(
-                epoch,
-                SnapshotMetadata {
-                    epoch,
-                    timestamp,
-                    hash,
-                },
-            );
-            latest = epoch;
-            timestamps.push_back(timestamp);
-        }
-
-        env.storage()
-            .persistent()
-            .set(&DataKey::Snapshots, &snapshots_map);
-        env.storage().instance().set(&DataKey::LatestEpoch, &latest);
-
-        env.events()
-            .publish((symbol_short!("batch"), caller), snapshots.len());
-
-        timestamps
-    }
-
-    /// Batch get multiple snapshots by epoch in a single call.
-    ///
-    /// # Arguments
-    /// * `env` - Contract environment
-    /// * `epochs` - Vector of epoch numbers to retrieve
-    ///
-    /// # Returns
-    /// * Vector of Option<SnapshotMetadata> (None for epochs not found)
-    pub fn batch_get_snapshots(
-        env: Env,
-        epochs: Vec<u64>,
-    ) -> Vec<Option<SnapshotMetadata>> {
-        let snapshots: Map<u64, SnapshotMetadata> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Snapshots)
-            .unwrap_or_else(|| Map::new(&env));
-
-        let mut results = Vec::new(&env);
-        for epoch in epochs.iter() {
-            results.push_back(snapshots.get(epoch));
-        }
-        results
-    }
-
-    /// Propose an admin change with a 48-hour timelock.
-    /// Only the current admin can propose. Returns the action ID.
+    /// Propose an admin change with a 48-hour timelock. Returns the action ID.
     pub fn propose_admin_change(env: Env, proposer: Address, new_admin: Address) -> u64 {
         proposer.require_auth();
 
@@ -996,13 +865,7 @@ impl AnalyticsContract {
             .get(&DataKey::TimelockAction(action_id))
     }
 
-    /// Check if contract is paused
-    ///
-    /// # Arguments
-    /// * `env` - Contract environment
-    ///
-    /// # Returns
-    /// * `true` if contract is paused, `false` otherwise
+    /// Check if contract is paused.
     pub fn is_paused(env: Env) -> bool {
         env.storage()
             .instance()
