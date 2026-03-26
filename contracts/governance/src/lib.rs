@@ -479,10 +479,10 @@ impl GovernanceContract {
             let client = AnalyticsContractClient::new(&env, &proposal.target_contract);
             match action {
                 ParameterAction::SetAdmin(addr) => {
-                    client.set_admin_by_governance(&governance, &addr);
+                    let _ = client.set_admin_by_governance(&governance, &addr);
                 }
                 ParameterAction::SetPaused(p) => {
-                    client.set_paused_by_governance(&governance, &p);
+                    let _ = client.set_paused_by_governance(&governance, &p);
                 }
             }
         }
