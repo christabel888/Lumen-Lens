@@ -1,5 +1,5 @@
 [package]
-name = "stellar-insights"
+name = "governance"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -15,6 +15,7 @@ panic = "deny"
 
 [dependencies]
 soroban-sdk = { workspace = true }
+analytics = { path = "../analytics" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
