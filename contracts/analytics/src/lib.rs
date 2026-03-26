@@ -169,8 +169,16 @@ fn check_rate_limit(env: &Env, caller: &Address) {
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 
+/// Check if the contract is initialized; panics if not.
+fn require_initialized(env: &Env) {
+    if !env.storage().instance().has(&DataKey::Admin) {
+        panic!("Contract not initialized: admin not set");
+    }
+}
+
 /// Read the admin address; panics if the contract is not initialized.
 fn require_admin(env: &Env) -> Address {
+    require_initialized(env);
     env.storage()
         .instance()
         .get(&DataKey::Admin)
@@ -545,7 +553,11 @@ impl AnalyticsContract {
     }
 
     /// Check whether a snapshot has expired.
+    ///
+    /// # Panics
+    /// * If contract is not initialized
     pub fn is_snapshot_expired(env: Env, epoch: u64) -> bool {
+        require_initialized(&env);
         let snapshots: Map<u64, SnapshotMetadata> = env
             .storage()
             .persistent()
@@ -569,11 +581,16 @@ impl AnalyticsContract {
     ///
     /// # Returns
     /// * Snapshot metadata for the epoch, or None if not found
+    ///
+    /// # Panics
+    /// * If contract is not initialized
     pub fn get_snapshot(env: Env, epoch: u64) -> Option<SnapshotMetadata> {
+        require_initialized(&env);
         env.storage().persistent().get(&DataKey::Snapshot(epoch))
     }
 
     pub fn get_latest_snapshot(env: Env) -> Option<SnapshotMetadata> {
+        require_initialized(&env);
         let latest_epoch: u64 = env
             .storage()
             .instance()
@@ -588,6 +605,7 @@ impl AnalyticsContract {
     }
 
     pub fn get_snapshot_history(env: Env) -> Map<u64, SnapshotMetadata> {
+        require_initialized(&env);
         env.storage()
             .persistent()
             .get(&DataKey::Snapshots)
@@ -595,6 +613,7 @@ impl AnalyticsContract {
     }
 
     pub fn get_latest_epoch(env: Env) -> u64 {
+        require_initialized(&env);
         env.storage()
             .instance()
             .get(&DataKey::LatestEpoch)
@@ -602,6 +621,7 @@ impl AnalyticsContract {
     }
 
     pub fn get_all_epochs(env: Env) -> soroban_sdk::Vec<u64> {
+        require_initialized(&env);
         let snapshots = Self::get_snapshot_history(env.clone());
         let mut epochs = soroban_sdk::Vec::new(&env);
         for (epoch, _) in snapshots.iter() {
@@ -873,10 +893,14 @@ impl AnalyticsContract {
     ///
     /// # Returns
     /// * Vector of Option<SnapshotMetadata> (None for epochs not found)
+    ///
+    /// # Panics
+    /// * If contract is not initialized
     pub fn batch_get_snapshots(
         env: Env,
         epochs: Vec<u64>,
     ) -> Vec<Option<SnapshotMetadata>> {
+        require_initialized(&env);
         let snapshots: Map<u64, SnapshotMetadata> = env
             .storage()
             .persistent()
