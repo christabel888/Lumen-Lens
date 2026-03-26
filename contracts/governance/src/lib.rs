@@ -551,6 +551,61 @@ impl GovernanceContract {
 
         Ok((admin, quorum, voting_period, proposal_count))
     }
+
+    pub fn getversion(env: Env) -> String {
+        String::from_str(&env, VERSION)
+    }
+
+    // =========================================================================
+    // Contract Metadata
+    // =========================================================================
+
+    /// Extended contract metadata for public disclosure
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct PublicMetadata {
+        pub name: String,
+        pub version: String,
+        pub author: String,
+        pub description: String,
+        pub repository: String,
+        pub license: String,
+    }
+
+    /// Contract info combining metadata with runtime state
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct ContractInfo {
+        pub metadata: PublicMetadata,
+        pub initialized: bool,
+        pub admin: Option<Address>,
+        pub total_proposals: u64,
+    }
+
+    /// Get public contract metadata
+    pub fn get_metadata(env: Env) -> PublicMetadata {
+        PublicMetadata {
+            name: String::from_str(&env, "Stellar Insights Governance"),
+            version: String::from_str(&env, VERSION),
+            author: String::from_str(&env, "Stellar Insights Team"),
+            description: String::from_str(
+                &env,
+                "Decentralized governance and voting contract for Stellar Insights",
+            ),
+            repository: String::from_str(&env, "https://github.com/stellar-insights/contracts"),
+            license: String::from_str(&env, "MIT"),
+        }
+    }
+
+    /// Get comprehensive contract information
+    pub fn get_contract_info(env: Env) -> ContractInfo {
+        ContractInfo {
+            metadata: Self::get_metadata(env.clone()),
+            initialized: env.storage().instance().has(&DataKey::Admin),
+            admin: env.storage().instance().get(&DataKey::Admin),
+            total_proposals: env.storage().instance().get(&DataKey::ProposalCount).unwrap_or(0),
+        }
+    }
 }
 
 mod test;

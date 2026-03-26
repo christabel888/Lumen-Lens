@@ -40,6 +40,29 @@ pub struct ContractMetadata {
     pub upgrade_timestamp: u64,
 }
 
+/// Extended contract metadata for public disclosure
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct PublicMetadata {
+    pub name: String,
+    pub version: String,
+    pub author: String,
+    pub description: String,
+    pub repository: String,
+    pub license: String,
+}
+
+/// Contract info combining metadata with runtime state
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ContractInfo {
+    pub metadata: PublicMetadata,
+    pub initialized: bool,
+    pub paused: bool,
+    pub admin: Option<Address>,
+    pub total_snapshots: u64,
+}
+
 #[contracttype]
 pub enum DataKey {
     Snapshots,
@@ -387,6 +410,38 @@ impl SnapshotContract {
             .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false)
+    }
+
+    /// Get public contract metadata
+    ///
+    /// Returns metadata information including name, version, author,
+    /// description, repository, and license.
+    pub fn get_metadata(env: Env) -> PublicMetadata {
+        PublicMetadata {
+            name: String::from_str(&env, "Stellar Insights Snapshot"),
+            version: String::from_str(&env, VERSION),
+            author: String::from_str(&env, "Stellar Insights Team"),
+            description: String::from_str(
+                &env,
+                "Snapshot management and verification contract for Stellar analytics",
+            ),
+            repository: String::from_str(&env, "https://github.com/stellar-insights/contracts"),
+            license: String::from_str(&env, "MIT"),
+        }
+    }
+
+    /// Get comprehensive contract information
+    ///
+    /// Returns both metadata and current runtime state including
+    /// initialization status, pause state, admin address, and snapshot count.
+    pub fn get_contract_info(env: Env) -> ContractInfo {
+        ContractInfo {
+            metadata: Self::get_metadata(env.clone()),
+            initialized: env.storage().instance().has(&DataKey::Admin),
+            paused: env.storage().instance().get(&DataKey::Paused).unwrap_or(false),
+            admin: env.storage().instance().get(&DataKey::Admin),
+            total_snapshots: env.storage().persistent().get(&DataKey::LatestEpoch).unwrap_or(0),
+        }
     }
 }
 

@@ -1123,37 +1123,57 @@ impl AnalyticsContract {
             .get(&DataKey::PendingAction(action_id))
     }
 
-    /// Emergency withdrawal of tokens from the contract.
-    /// Only the admin can call this, and the contract must be paused.
-    pub fn emergency_withdraw(
-        env: Env,
-        admin: Address,
-        token_addr: Address,
-        amount: i128,
-        recipient: Address,
-    ) {
-        admin.require_auth();
-        let stored_admin = require_admin(&env);
-        if admin != stored_admin {
-            panic!("Unauthorized: only the admin can perform emergency withdrawal");
+    // =========================================================================
+    // Contract Metadata
+    // =========================================================================
+
+    /// Extended contract metadata for public disclosure
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct PublicMetadata {
+        pub name: String,
+        pub version: String,
+        pub author: String,
+        pub description: String,
+        pub repository: String,
+        pub license: String,
+    }
+
+    /// Contract info combining metadata with runtime state
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct ContractInfo {
+        pub metadata: PublicMetadata,
+        pub initialized: bool,
+        pub paused: bool,
+        pub admin: Option<Address>,
+        pub total_snapshots: u64,
+    }
+
+    /// Get public contract metadata
+    pub fn get_metadata(env: Env) -> PublicMetadata {
+        PublicMetadata {
+            name: String::from_str(&env, "Stellar Insights Analytics"),
+            version: String::from_str(&env, VERSION),
+            author: String::from_str(&env, "Stellar Insights Team"),
+            description: String::from_str(
+                &env,
+                "Advanced analytics and data aggregation contract for Stellar network",
+            ),
+            repository: String::from_str(&env, "https://github.com/stellar-insights/contracts"),
+            license: String::from_str(&env, "MIT"),
         }
+    }
 
-        let paused: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Paused)
-            .unwrap_or(false);
-        if !paused {
-            panic!("Contract must be paused for emergency withdrawal");
+    /// Get comprehensive contract information
+    pub fn get_contract_info(env: Env) -> ContractInfo {
+        ContractInfo {
+            metadata: Self::get_metadata(env.clone()),
+            initialized: env.storage().instance().has(&DataKey::Admin),
+            paused: env.storage().instance().get(&DataKey::Paused).unwrap_or(false),
+            admin: env.storage().instance().get(&DataKey::Admin),
+            total_snapshots: env.storage().instance().get(&DataKey::LatestEpoch).unwrap_or(0),
         }
-
-        let token_client = token::Client::new(&env, &token_addr);
-        token_client.transfer(&env.current_contract_address(), &recipient, &amount);
-
-        env.events().publish(
-            (symbol_short!("emergency"), admin),
-            (token_addr, amount, recipient),
-        );
     }
 }
 

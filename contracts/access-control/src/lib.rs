@@ -225,6 +225,58 @@ impl AccessControl {
                 | (Role::Viewer, Role::Viewer)
         )
     }
+
+    // =========================================================================
+    // Contract Metadata
+    // =========================================================================
+
+    /// Extended contract metadata for public disclosure
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct PublicMetadata {
+        pub name: String,
+        pub version: String,
+        pub author: String,
+        pub description: String,
+        pub repository: String,
+        pub license: String,
+    }
+
+    /// Contract info combining metadata with runtime state
+    #[contracttype]
+    #[derive(Clone, Debug)]
+    pub struct ContractInfo {
+        pub metadata: PublicMetadata,
+        pub initialized: bool,
+        pub total_roles: u32,
+    }
+
+    /// Get public contract metadata
+    pub fn get_metadata(env: Env) -> PublicMetadata {
+        PublicMetadata {
+            name: String::from_str(&env, "Stellar Insights Access Control"),
+            version: String::from_str(&env, VERSION),
+            author: String::from_str(&env, "Stellar Insights Team"),
+            description: String::from_str(
+                &env,
+                "Role-based access control contract for Stellar Insights",
+            ),
+            repository: String::from_str(&env, "https://github.com/stellar-insights/contracts"),
+            license: String::from_str(&env, "MIT"),
+        }
+    }
+
+    /// Get comprehensive contract information
+    pub fn get_contract_info(env: Env) -> ContractInfo {
+        // Check if contract is initialized by looking for any stored roles
+        let initialized = env.storage().instance().get::<DataKey, String>(&DataKey::Version).is_some();
+        
+        ContractInfo {
+            metadata: Self::get_metadata(env),
+            initialized,
+            total_roles: 0, // Role count would require iteration which is complex in Soroban
+        }
+    }
 }
 
 #[cfg(test)]
