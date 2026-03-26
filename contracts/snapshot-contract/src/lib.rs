@@ -1,11 +1,12 @@
 #![no_std]
 use soroban_sdk::{
     contract, contractimpl, contracttype, contracterror, symbol_short, Address, Bytes, BytesN, Env,
-    Map, Symbol,
+    Map, String, Symbol,
 };
 
 const HASH_SIZE: u32 = 32;
 const CONTRACT_VERSION: u32 = 1;
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,6 +32,32 @@ pub struct Snapshot {
     pub hash: Bytes,
     pub epoch: u64,
     pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotSubmittedEvent {
+    pub epoch: u64,
+    pub hash: Bytes,
+    pub timestamp: u64,
+    pub previous_epoch: u64, // 0 means no previous epoch
+    pub ledger_sequence: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseEvent {
+    pub paused_by: Address,
+    pub timestamp: u64,
+    pub ledger_sequence: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UnpauseEvent {
+    pub unpaused_by: Address,
+    pub timestamp: u64,
+    pub ledger_sequence: u32,
 }
 
 #[contracttype]
@@ -278,6 +305,7 @@ impl SnapshotContract {
         }
 
         let timestamp = env.ledger().timestamp();
+        let ledger_sequence = env.ledger().sequence();
 
         let snapshot = Snapshot {
             hash: hash.clone(),
@@ -303,8 +331,16 @@ impl SnapshotContract {
             .persistent()
             .set(&DataKey::LatestEpoch, &epoch);
 
-        env.events()
-            .publish((symbol_short!("SNAP_SUB"),), (hash, epoch, timestamp));
+        env.events().publish(
+            (symbol_short!("SNAP_SUB"),),
+            SnapshotSubmittedEvent {
+                epoch,
+                hash,
+                timestamp,
+                previous_epoch: current_latest.unwrap_or(0),
+                ledger_sequence,
+            },
+        );
 
         Ok(timestamp)
     }
@@ -390,6 +426,14 @@ impl SnapshotContract {
             return Err(Error::Unauthorized);
         }
         env.storage().instance().set(&DataKey::Paused, &true);
+        env.events().publish(
+            (symbol_short!("pause"), caller.clone()),
+            PauseEvent {
+                paused_by: caller,
+                timestamp: env.ledger().timestamp(),
+                ledger_sequence: env.ledger().sequence(),
+            },
+        );
         Ok(())
     }
 
@@ -401,6 +445,14 @@ impl SnapshotContract {
             return Err(Error::Unauthorized);
         }
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.events().publish(
+            (symbol_short!("unpause"), caller.clone()),
+            UnpauseEvent {
+                unpaused_by: caller,
+                timestamp: env.ledger().timestamp(),
+                ledger_sequence: env.ledger().sequence(),
+            },
+        );
         Ok(())
     }
 

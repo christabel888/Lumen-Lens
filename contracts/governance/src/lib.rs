@@ -8,6 +8,8 @@ use errors::Error;
 use events::{emit_proposal_created, emit_proposal_finalized, emit_vote_cast};
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Map, String};
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 // ============================================================================
 // Data Types
 // ============================================================================
@@ -83,6 +85,28 @@ pub enum DataKey {
 // ============================================================================
 // Contract
 // ============================================================================
+
+/// Extended contract metadata for public disclosure
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct PublicMetadata {
+    pub name: String,
+    pub version: String,
+    pub author: String,
+    pub description: String,
+    pub repository: String,
+    pub license: String,
+}
+
+/// Contract info combining metadata with runtime state
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ContractInfo {
+    pub metadata: PublicMetadata,
+    pub initialized: bool,
+    pub admin: Option<Address>,
+    pub total_proposals: u64,
+}
 
 #[contract]
 pub struct GovernanceContract;
@@ -546,28 +570,6 @@ impl GovernanceContract {
     // =========================================================================
     // Contract Metadata
     // =========================================================================
-
-    /// Extended contract metadata for public disclosure
-    #[contracttype]
-    #[derive(Clone, Debug)]
-    pub struct PublicMetadata {
-        pub name: String,
-        pub version: String,
-        pub author: String,
-        pub description: String,
-        pub repository: String,
-        pub license: String,
-    }
-
-    /// Contract info combining metadata with runtime state
-    #[contracttype]
-    #[derive(Clone, Debug)]
-    pub struct ContractInfo {
-        pub metadata: PublicMetadata,
-        pub initialized: bool,
-        pub admin: Option<Address>,
-        pub total_proposals: u64,
-    }
 
     /// Get public contract metadata
     pub fn get_metadata(env: Env) -> PublicMetadata {

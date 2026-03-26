@@ -1,10 +1,7 @@
 #![no_std]
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, Map, String,
-    Vec,
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String, Vec,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -93,7 +90,18 @@ pub struct SnapshotSubmittedEvent {
     pub hash: BytesN<32>,
     pub submitter: Address,
     pub timestamp: u64,
-    pub previous_epoch: u64,
+    pub previous_epoch: u64, // 0 means no previous epoch
+    pub ledger_sequence: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BatchSubmitEvent {
+    pub count: u32,
+    pub first_epoch: u64,
+    pub last_epoch: u64,
+    pub submitter: Address,
+    pub timestamp: u64,
     pub ledger_sequence: u32,
 }
 
@@ -158,23 +166,6 @@ pub struct PaginatedSnapshots {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MultiSigConfig {
-    pub admins: Vec<Address>,
-    pub threshold: u32,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PendingAction {
-    pub action_id: u64,
-    pub action_type: String,
-    pub signatures: Vec<Address>,
-    pub created_at: u64,
-    pub expires_at: u64,
-}
-
-#[contracttype]
 pub enum DataKey {
     Admin,
     Snapshots,
@@ -192,7 +183,6 @@ pub enum DataKey {
     /// Multi-sig admin configuration
     MultiSigConfig,
     /// Pending multi-sig action keyed by action ID
-    MultiSigConfig,
     PendingAction(u64),
 }
 
@@ -273,6 +263,29 @@ fn write_snapshot(
         .persistent()
         .set(&DataKey::Snapshots, snapshots);
     env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
+}
+
+/// Extended contract metadata for public disclosure
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct PublicMetadata {
+    pub name: String,
+    pub version: String,
+    pub author: String,
+    pub description: String,
+    pub repository: String,
+    pub license: String,
+}
+
+/// Contract info combining metadata with runtime state
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ContractInfo {
+    pub metadata: PublicMetadata,
+    pub initialized: bool,
+    pub paused: bool,
+    pub admin: Option<Address>,
+    pub total_snapshots: u64,
 }
 
 // ── Contract ─────────────────────────────────────────────────────────────────
@@ -440,17 +453,29 @@ impl AnalyticsContract {
 
         let mut results = Vec::new(&env);
         for (epoch, hash) in snapshots_input.iter() {
-            validate_epoch(&env, epoch);
+            let previous_epoch = validate_epoch(&env, epoch);
             let timestamp = env.ledger().timestamp();
+            let ledger_sequence = env.ledger().sequence();
             let metadata = SnapshotMetadata {
                 epoch,
                 timestamp,
-                hash,
+                hash: hash.clone(),
                 submitter: caller.clone(),
-                ledger_sequence: env.ledger().sequence(),
+                ledger_sequence,
                 expires_at: None,
             };
             write_snapshot(&env, epoch, &metadata, &mut snapshots);
+            env.events().publish(
+                (symbol_short!("snapshot"), caller.clone()),
+                SnapshotSubmittedEvent {
+                    epoch,
+                    hash,
+                    submitter: caller.clone(),
+                    timestamp,
+                    previous_epoch,
+                    ledger_sequence,
+                },
+            );
             results.push_back(timestamp);
         }
         results
@@ -812,8 +837,23 @@ impl AnalyticsContract {
             timestamps.push_back(timestamp);
         }
 
-        env.events()
-            .publish((symbol_short!("batch"), caller), snapshots.len());
+        let last_epoch: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LatestEpoch)
+            .unwrap_or(0);
+        let first_epoch = snapshots.get(0).map(|(e, _)| e).unwrap_or(0);
+        env.events().publish(
+            (symbol_short!("batch"), caller.clone()),
+            BatchSubmitEvent {
+                count: snapshots.len(),
+                first_epoch,
+                last_epoch,
+                submitter: caller,
+                timestamp: env.ledger().timestamp(),
+                ledger_sequence: env.ledger().sequence(),
+            },
+        );
 
         timestamps
     }
@@ -1019,8 +1059,6 @@ impl AnalyticsContract {
 
         if threshold == 0 || threshold > admins.len() as u32 {
             panic!("Invalid threshold: must be between 1 and the number of admins");
-        if threshold == 0 || threshold > admins.len() {
-            panic!("Invalid threshold: must be > 0 and <= number of admins");
         }
 
         let config = MultiSigConfig { admins, threshold };
@@ -1126,29 +1164,6 @@ impl AnalyticsContract {
     // =========================================================================
     // Contract Metadata
     // =========================================================================
-
-    /// Extended contract metadata for public disclosure
-    #[contracttype]
-    #[derive(Clone, Debug)]
-    pub struct PublicMetadata {
-        pub name: String,
-        pub version: String,
-        pub author: String,
-        pub description: String,
-        pub repository: String,
-        pub license: String,
-    }
-
-    /// Contract info combining metadata with runtime state
-    #[contracttype]
-    #[derive(Clone, Debug)]
-    pub struct ContractInfo {
-        pub metadata: PublicMetadata,
-        pub initialized: bool,
-        pub paused: bool,
-        pub admin: Option<Address>,
-        pub total_snapshots: u64,
-    }
 
     /// Get public contract metadata
     pub fn get_metadata(env: Env) -> PublicMetadata {
