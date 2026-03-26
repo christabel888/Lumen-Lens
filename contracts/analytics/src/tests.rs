@@ -418,3 +418,139 @@ fn test_old_admin_cannot_submit_after_transfer() {
     let hash = create_test_hash(&env, 1);
     client.submit_snapshot(&epoch, &hash, &admin);
 }
+
+// ============================================================================
+// Multi-Sig Tests
+// ============================================================================
+
+fn make_admins(env: &Env, n: u32) -> Vec<Address> {
+    let mut v = Vec::new(env);
+    for _ in 0..n {
+        v.push_back(Address::generate(env));
+    }
+    v
+}
+
+#[test]
+fn test_multisig_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let admins = make_admins(&env, 3);
+    let result = client.initialize_multisig(&admin, &admins, &2);
+    assert_eq!(result, Ok(()));
+
+    let config = client.get_multisig_config().unwrap();
+    assert_eq!(config.threshold, 2);
+    assert_eq!(config.admins.len(), 3);
+}
+
+#[test]
+fn test_multisig_initialization_invalid_threshold() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let admins = make_admins(&env, 2);
+
+    // threshold 0 is invalid
+    assert!(client.initialize_multisig(&admin, &admins, &0).is_err());
+    // threshold > admins.len() is invalid
+    assert!(client.initialize_multisig(&admin, &admins, &5).is_err());
+}
+
+#[test]
+fn test_multisig_proposal() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let admins = make_admins(&env, 3);
+    client.initialize_multisig(&admin, &admins, &2).unwrap();
+
+    let proposer = admins.get(0).unwrap();
+    let action_data = BytesN::from_array(&env, &[0u8; 32]);
+    let action_id = client.propose_action(
+        &proposer,
+        &soroban_sdk::String::from_str(&env, "set_admin"),
+        &action_data,
+    );
+
+    let pending = client.get_pending_action(&action_id).unwrap();
+    assert_eq!(pending.action_id, action_id);
+    assert_eq!(pending.signatures.len(), 1);
+    assert_eq!(pending.signatures.get(0).unwrap(), proposer);
+}
+
+#[test]
+fn test_multisig_threshold() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let admins = make_admins(&env, 3);
+    client.initialize_multisig(&admin, &admins, &2).unwrap();
+
+    let proposer = admins.get(0).unwrap();
+    let signer2 = admins.get(1).unwrap();
+    let action_data = BytesN::from_array(&env, &[0u8; 32]);
+
+    let action_id = client.propose_action(
+        &proposer,
+        &soroban_sdk::String::from_str(&env, "set_admin"),
+        &action_data,
+    );
+
+    // First signature already added by proposer; threshold not yet reached (need 2)
+    let reached = client.sign_action(&signer2, &action_id);
+    assert!(reached, "Threshold should be reached after second signature");
+}
+
+#[test]
+fn test_multisig_duplicate_signature_ignored() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let admins = make_admins(&env, 3);
+    client.initialize_multisig(&admin, &admins, &3).unwrap();
+
+    let proposer = admins.get(0).unwrap();
+    let action_data = BytesN::from_array(&env, &[0u8; 32]);
+    let action_id = client.propose_action(
+        &proposer,
+        &soroban_sdk::String::from_str(&env, "pause"),
+        &action_data,
+    );
+
+    // Signing again with the same address should not add a duplicate
+    client.sign_action(&proposer, &action_id);
+    let pending = client.get_pending_action(&action_id).unwrap();
+    assert_eq!(pending.signatures.len(), 1);
+}

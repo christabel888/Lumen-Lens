@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Map};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Map, String, Vec};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -8,6 +8,23 @@ pub struct SnapshotMetadata {
     pub timestamp: u64,
     pub hash: BytesN<32>,
     // Extendable for future fields
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MultiSigConfig {
+    pub admins: Vec<Address>,
+    pub threshold: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingAction {
+    pub action_id: u64,
+    pub action_type: String,
+    pub signatures: Vec<Address>,
+    pub created_at: u64,
+    pub expires_at: u64,
 }
 
 #[contracttype]
@@ -22,6 +39,12 @@ pub enum DataKey {
     Paused,
     /// Governance contract address (only it can call set_admin_by_governance / set_paused_by_governance)
     Governance,
+    /// Multi-sig configuration (admins list + threshold)
+    MultiSigConfig,
+    /// Pending multi-sig action by action_id
+    PendingAction(u64),
+    /// Auto-incrementing action ID counter
+    NextActionId,
 }
 
 #[contract]
@@ -396,6 +419,136 @@ impl AnalyticsContract {
             .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false)
+    }
+
+    // =========================================================================
+    // Multi-Sig Admin Support
+    // =========================================================================
+
+    /// Initialize multi-sig configuration with a list of admins and a signing threshold.
+    /// Only the current single admin can call this.
+    pub fn initialize_multisig(
+        env: Env,
+        caller: Address,
+        admins: Vec<Address>,
+        threshold: u32,
+    ) -> Result<(), u32> {
+        caller.require_auth();
+
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized: admin not set");
+
+        if caller != admin {
+            panic!("Unauthorized: only the admin can initialize multisig");
+        }
+
+        if threshold == 0 || threshold > admins.len() as u32 {
+            return Err(1); // InvalidThreshold
+        }
+
+        let config = MultiSigConfig { admins, threshold };
+        env.storage()
+            .instance()
+            .set(&DataKey::MultiSigConfig, &config);
+
+        Ok(())
+    }
+
+    /// Get the current multi-sig configuration.
+    pub fn get_multisig_config(env: Env) -> Option<MultiSigConfig> {
+        env.storage().instance().get(&DataKey::MultiSigConfig)
+    }
+
+    /// Propose a new multi-sig action. The proposer automatically adds their signature.
+    /// Returns the new action_id.
+    pub fn propose_action(
+        env: Env,
+        proposer: Address,
+        action_type: String,
+        _action_data: BytesN<32>,
+    ) -> u64 {
+        proposer.require_auth();
+
+        let config: MultiSigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultiSigConfig)
+            .expect("MultiSig not initialized");
+
+        if !config.admins.contains(&proposer) {
+            panic!("Unauthorized: proposer is not a multisig admin");
+        }
+
+        let action_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextActionId)
+            .unwrap_or(0u64);
+
+        let mut sigs = Vec::new(&env);
+        sigs.push_back(proposer);
+
+        let pending = PendingAction {
+            action_id,
+            action_type,
+            signatures: sigs,
+            created_at: env.ledger().timestamp(),
+            expires_at: env.ledger().timestamp() + 86400,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::PendingAction(action_id), &pending);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::NextActionId, &(action_id + 1));
+
+        action_id
+    }
+
+    /// Sign an existing pending action. Returns `true` if the threshold is now reached.
+    pub fn sign_action(env: Env, signer: Address, action_id: u64) -> bool {
+        signer.require_auth();
+
+        let config: MultiSigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultiSigConfig)
+            .expect("MultiSig not initialized");
+
+        if !config.admins.contains(&signer) {
+            panic!("Unauthorized: signer is not a multisig admin");
+        }
+
+        let mut pending: PendingAction = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PendingAction(action_id))
+            .expect("Action not found");
+
+        if env.ledger().timestamp() > pending.expires_at {
+            panic!("Action expired");
+        }
+
+        if !pending.signatures.contains(&signer) {
+            pending.signatures.push_back(signer);
+            env.storage()
+                .persistent()
+                .set(&DataKey::PendingAction(action_id), &pending);
+        }
+
+        pending.signatures.len() >= config.threshold
+    }
+
+    /// Get a pending action by ID.
+    pub fn get_pending_action(env: Env, action_id: u64) -> Option<PendingAction> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PendingAction(action_id))
     }
 }
 
