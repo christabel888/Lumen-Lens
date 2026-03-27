@@ -296,6 +296,16 @@ fn write_snapshot(
     env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
 }
 
+fn get_next_action_id(env: &Env) -> u64 {
+    let id: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::NextActionId)
+        .unwrap_or(0);
+    env.storage().instance().set(&DataKey::NextActionId, &(id + 1));
+    id
+}
+
 // ── Contract metadata types ───────────────────────────────────────────────────
 
 /// Extended contract metadata for public disclosure.
@@ -913,28 +923,9 @@ impl AnalyticsContract {
                 .log_context(&env, "propose_admin_change: caller is not the admin"));
         }
 
-        let action_id: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::NextActionId)
-            .unwrap_or(0u64);
+        let action_id = get_next_action_id(&env);
 
         let now = env.ledger().timestamp();
-        let action = TimelockAction {
-            action_type: String::from_str(&env, "set_admin"),
-            new_admin: new_admin.clone(),
-            proposer: proposer.clone(),
-            proposed_at: now,
-            executable_at: now + TIMELOCK_DELAY,
-            executed: false,
-        };
-
-        env.storage()
-            .persistent()
-            .set(&DataKey::TimelockAction(action_id), &action);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextActionId, &(action_id + 1));
 
         env.events().publish(
             (symbol_short!("propose"), proposer),
@@ -1083,19 +1074,8 @@ impl AnalyticsContract {
     // Multi-Sig Admin Support
     // =========================================================================
 
-    /// Initialize multi-sig configuration. Only the current single admin can call this.
-    pub fn initialize_multisig(
-        env: Env,
-        caller: Address,
-        admins: Vec<Address>,
-        threshold: u32,
-    ) -> Result<(), Error> {
-        caller.require_auth();
-        let admin = require_admin(&env)?;
-        if caller != admin {
-            return Err(Error::Unauthorized
-                .log_context(&env, "initialize_multisig: caller is not the admin"));
-        }
+    /// Initialize multi-sig configuration.
+    pub fn initialize_multisig(env: Env, admins: Vec<Address>, threshold: u32) -> Result<(), Error> {
         if threshold == 0 || threshold > admins.len() as u32 {
             panic!("Invalid threshold: must be between 1 and the number of admins");
             return Err(Error::InvalidThreshold.log_context(
@@ -1103,10 +1083,12 @@ impl AnalyticsContract {
                 "initialize_multisig: threshold must be between 1 and number of admins",
             ));
         }
+
         let config = MultiSigConfig { admins, threshold };
         env.storage()
             .instance()
             .set(&DataKey::MultiSigConfig, &config);
+
         Ok(())
     }
 
@@ -1140,29 +1122,22 @@ impl AnalyticsContract {
                 .log_context(&env, "propose_action: proposer is not a multisig admin"));
         }
 
-        let action_id: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::NextActionId)
-            .unwrap_or(0u64);
+        let action_id = get_next_action_id(&env);
 
         let mut sigs = Vec::new(&env);
-        sigs.push_back(proposer);
+        sigs.push_back(proposer.clone());
 
         let pending = PendingAction {
             action_id,
             action_type,
             signatures: sigs,
             created_at: env.ledger().timestamp(),
-            expires_at: env.ledger().timestamp() + 86_400,
+            expires_at: env.ledger().timestamp() + 86_400, // 24 hours
         };
 
         env.storage()
             .persistent()
             .set(&DataKey::PendingAction(action_id), &pending);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextActionId, &(action_id + 1));
 
         Ok(action_id)
     }
