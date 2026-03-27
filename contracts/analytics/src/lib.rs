@@ -72,6 +72,15 @@ pub struct UnpauseEvent {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseInfo {
+    pub paused: bool,
+    pub reason: String,
+    pub paused_at: u64,
+    pub paused_by: Address,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TimelockAction {
     pub action_type: String,
     pub new_admin: Address,
@@ -121,6 +130,7 @@ pub enum DataKey {
     LatestEpoch,
     Snapshot(u64),
     Paused,
+    PauseInfo,
     Governance,
     NextActionId,
     TimelockAction(u64),
@@ -620,13 +630,27 @@ impl AnalyticsContract {
         if caller != admin {
             return Err(Error::Unauthorized.log_context(&env, "pause: caller is not the admin"));
         }
+
+        let timestamp = env.ledger().timestamp();
+
+        // Store structured pause info for transparency
+        let pause_info = PauseInfo {
+            paused: true,
+            reason: reason.clone(),
+            paused_at: timestamp,
+            paused_by: caller.clone(),
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::PauseInfo, &pause_info);
         env.storage().instance().set(&DataKey::Paused, &true);
+
         env.events().publish(
             (symbol_short!("pause"), caller.clone()),
             PauseEvent {
                 paused_by: caller,
                 reason,
-                timestamp: env.ledger().timestamp(),
+                timestamp,
                 ledger_sequence: env.ledger().sequence(),
             },
         );
@@ -640,13 +664,27 @@ impl AnalyticsContract {
         if caller != admin {
             return Err(Error::Unauthorized.log_context(&env, "unpause: caller is not the admin"));
         }
+
+        let timestamp = env.ledger().timestamp();
+
+        // Update pause info to reflect the unpaused state
+        let pause_info = PauseInfo {
+            paused: false,
+            reason: reason.clone(),
+            paused_at: timestamp,
+            paused_by: caller.clone(),
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::PauseInfo, &pause_info);
         env.storage().instance().set(&DataKey::Paused, &false);
+
         env.events().publish(
             (symbol_short!("unpause"), caller.clone()),
             UnpauseEvent {
                 unpaused_by: caller,
                 reason,
-                timestamp: env.ledger().timestamp(),
+                timestamp,
                 ledger_sequence: env.ledger().sequence(),
             },
         );
@@ -969,6 +1007,12 @@ impl AnalyticsContract {
             .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false)
+    }
+
+    /// Get detailed pause information including reason, timestamp, and who paused.
+    /// Returns `None` if the contract has never been paused.
+    pub fn get_pause_info(env: Env) -> Option<PauseInfo> {
+        env.storage().instance().get(&DataKey::PauseInfo)
     }
 
     // =========================================================================
