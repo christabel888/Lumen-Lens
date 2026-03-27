@@ -24,6 +24,11 @@ pub enum Error {
     SnapshotNotFound = 10,
     InvalidMigration = 11,
     InvalidWasmHash = 12,
+    MultiSigNotInitialized = 13,
+    InvalidThreshold = 14,
+    SignerNotAdmin = 15,
+    ActionNotFound = 16,
+    ActionExpired = 17,
 }
 
 #[contracttype]
@@ -91,6 +96,23 @@ pub struct ContractInfo {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MultiSigConfig {
+    pub admins: Vec<Address>,
+    pub threshold: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingAction {
+    pub action_id: u64,
+    pub action_type: String,
+    pub signatures: Vec<Address>,
+    pub created_at: u64,
+    pub expires_at: u64,
+}
+
+#[contracttype]
 pub enum DataKey {
     Snapshots,
     LatestEpoch,
@@ -98,6 +120,9 @@ pub enum DataKey {
     Admin,
     Stopped,
     Paused,
+    MultiSigConfig,
+    PendingAction(u64),
+    NextActionId,
 }
 
 #[contract]
@@ -116,6 +141,16 @@ impl SnapshotContract {
             return Err(Error::ContractStopped);
         }
         Ok(())
+    }
+
+    fn get_next_action_id(env: &Env) -> u64 {
+        let id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextActionId)
+            .unwrap_or(0);
+        env.storage().instance().set(&DataKey::NextActionId, &(id + 1));
+        id
     }
 
     /// Internal: get admin or return NotInitialized error.
@@ -502,6 +537,100 @@ impl SnapshotContract {
                 .get(&DataKey::LatestEpoch)
                 .unwrap_or(0),
         }
+    }
+
+    pub fn initialize_multisig(env: Env, admins: Vec<Address>, threshold: u32) -> Result<(), Error> {
+        if threshold == 0 || threshold > admins.len() as u32 {
+            return Err(Error::InvalidThreshold);
+        }
+
+        let config = MultiSigConfig { admins, threshold };
+        env.storage()
+            .instance()
+            .set(&DataKey::MultiSigConfig, &config);
+
+        Ok(())
+    }
+
+    pub fn propose_action(
+        env: Env,
+        proposer: Address,
+        action_type: String,
+        _action_data: BytesN<32>,
+    ) -> Result<u64, Error> {
+        proposer.require_auth();
+
+        let config: MultiSigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultiSigConfig)
+            .ok_or(Error::MultiSigNotInitialized)?;
+
+        if !config.admins.contains(&proposer) {
+            return Err(Error::Unauthorized);
+        }
+
+        let action_id = Self::get_next_action_id(&env);
+
+        let mut sigs = Vec::new(&env);
+        sigs.push_back(proposer);
+
+        let pending = PendingAction {
+            action_id,
+            action_type,
+            signatures: sigs,
+            created_at: env.ledger().timestamp(),
+            expires_at: env.ledger().timestamp() + 86_400,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::PendingAction(action_id), &pending);
+
+        Ok(action_id)
+    }
+
+    pub fn sign_action(env: Env, signer: Address, action_id: u64) -> Result<bool, Error> {
+        signer.require_auth();
+
+        let config: MultiSigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultiSigConfig)
+            .ok_or(Error::MultiSigNotInitialized)?;
+
+        if !config.admins.contains(&signer) {
+            return Err(Error::Unauthorized);
+        }
+
+        let mut pending: PendingAction = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PendingAction(action_id))
+            .ok_or(Error::ActionNotFound)?;
+
+        if env.ledger().timestamp() > pending.expires_at {
+            return Err(Error::ActionExpired);
+        }
+
+        if !pending.signatures.contains(&signer) {
+            pending.signatures.push_back(signer);
+            env.storage()
+                .persistent()
+                .set(&DataKey::PendingAction(action_id), &pending);
+        }
+
+        Ok(pending.signatures.len() >= config.threshold)
+    }
+
+    pub fn get_multisig_config(env: Env) -> Option<MultiSigConfig> {
+        env.storage().instance().get(&DataKey::MultiSigConfig)
+    }
+
+    pub fn get_pending_action(env: Env, action_id: u64) -> Option<PendingAction> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PendingAction(action_id))
     }
 }
 
@@ -952,5 +1081,75 @@ mod test {
         client.submit_snapshot(&hash2, &2);
         assert!(!client.verify_latest_snapshot(&hash1));
         assert!(client.verify_latest_snapshot(&hash2));
+    }
+
+    #[test]
+    fn test_multisig_initialization() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, SnapshotContract);
+        let client = SnapshotContractClient::new(&env, &contract_id);
+
+        let admin1 = Address::generate(&env);
+        let admin2 = Address::generate(&env);
+        let admins = vec![&env, admin1.clone(), admin2.clone()];
+        let threshold = 2;
+
+        client.initialize_multisig(&admins, &threshold);
+
+        let config = client.get_multisig_config().unwrap();
+        assert_eq!(config.admins.len(), 2);
+        assert_eq!(config.threshold, 2);
+        assert!(config.admins.contains(&admin1));
+        assert!(config.admins.contains(&admin2));
+    }
+
+    #[test]
+    fn test_multisig_proposal() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, SnapshotContract);
+        let client = SnapshotContractClient::new(&env, &contract_id);
+
+        let admin1 = Address::generate(&env);
+        let admin2 = Address::generate(&env);
+        let admins = vec![&env, admin1.clone(), admin2.clone()];
+        client.initialize_multisig(&admins, &2);
+
+        let action_type = soroban_sdk::String::from_str(&env, "upgrade");
+        let action_data = BytesN::from_array(&env, &[0u8; 32]);
+        let action_id = client.propose_action(&admin1, &action_type, &action_data);
+
+        let pending = client.get_pending_action(&action_id).unwrap();
+        assert_eq!(pending.action_id, action_id);
+        assert_eq!(pending.signatures.len(), 1);
+        assert_eq!(pending.signatures.get(0).unwrap(), admin1);
+    }
+
+    #[test]
+    fn test_multisig_threshold() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, SnapshotContract);
+        let client = SnapshotContractClient::new(&env, &contract_id);
+
+        let admin1 = Address::generate(&env);
+        let admin2 = Address::generate(&env);
+        let admins = vec![&env, admin1.clone(), admin2.clone()];
+        client.initialize_multisig(&admins, &2);
+
+        let action_type = soroban_sdk::String::from_str(&env, "test");
+        let action_data = BytesN::from_array(&env, &[0u8; 32]);
+        let action_id = client.propose_action(&admin1, &action_type, &action_data);
+
+        // First signature already added by proposer
+        let reached_first = client.sign_action(&admin1, &action_id);
+        assert!(!reached_first); // Already signed, still 1/2
+
+        // Second signature
+        let reached_second = client.sign_action(&admin2, &action_id);
+        assert!(reached_second); // Now 2/2
+
+        let pending = client.get_pending_action(&action_id).unwrap();
+        assert_eq!(pending.signatures.len(), 2);
     }
 }

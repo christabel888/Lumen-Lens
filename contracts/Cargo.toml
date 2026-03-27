@@ -28,6 +28,10 @@ panic = "abort"
 codegen-units = 1
 lto = true
 
+[profile.bench]
+opt-level = 3
+debug = false
+
 # For more information about this profile see https://soroban.stellar.org/docs/basic-tutorials/logging#cargotoml-profile
 [profile.release-with-logs]
 inherits = "release"

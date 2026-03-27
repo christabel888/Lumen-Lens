@@ -4,6 +4,67 @@ mod errors;
 
 pub use errors::Error;
 use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String,
+    Vec,
+};
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ErrorEvent {
+    pub error_code: u32,
+    pub error_message: String,
+    pub function_name: String,
+    pub caller: Address,
+    pub timestamp: u64,
+    pub ledger_sequence: u32,
+    pub context: String,
+}
+
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ContractError {
+    ContractPaused = 1,
+    Unauthorized = 2,
+    InvalidEpoch = 3,
+    EpochAlreadyExists = 4,
+    EpochMonotonicityViolated = 5,
+    SnapshotImmutabilityViolated = 6,
+}
+
+fn emit_error_event(
+    env: &Env,
+    error: ContractError,
+    function_name: &str,
+    caller: &Address,
+    context: &str,
+) {
+    let msg = match error {
+        ContractError::ContractPaused => "Contract is paused",
+        ContractError::Unauthorized => "Unauthorized caller",
+        ContractError::InvalidEpoch => "Invalid epoch value",
+        ContractError::EpochAlreadyExists => "Epoch already exists",
+        ContractError::EpochMonotonicityViolated => "Epoch monotonicity violated",
+        ContractError::SnapshotImmutabilityViolated => "Snapshot immutability violated",
+    };
+    env.events().publish(
+        (symbol_short!("error"), caller.clone()),
+        ErrorEvent {
+            error_code: error as u32,
+            error_message: String::from_str(env, msg),
+            function_name: String::from_str(env, function_name),
+            caller: caller.clone(),
+            timestamp: env.ledger().timestamp(),
+            ledger_sequence: env.ledger().sequence(),
+            context: String::from_str(env, context),
+        },
+    );
+}
+
+const DEFAULT_SNAPSHOT_TTL: u64 = 7_776_000; // 90 days in seconds
+const LEDGER_SECONDS: u64 = 5; // ~5 seconds per ledger
+
+const RATE_LIMIT_WINDOW: u64 = 3600; // 1 hour
+const MAX_CALLS_PER_WINDOW: u32 = 100;
     contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String, Vec,
 };
 
@@ -72,6 +133,15 @@ pub struct UnpauseEvent {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseInfo {
+    pub paused: bool,
+    pub reason: String,
+    pub paused_at: u64,
+    pub paused_by: Address,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TimelockAction {
     pub action_type: String,
     pub new_admin: Address,
@@ -121,11 +191,15 @@ pub enum DataKey {
     LatestEpoch,
     Snapshot(u64),
     Paused,
+    PauseInfo,
     Governance,
     NextActionId,
     TimelockAction(u64),
     RateLimit(Address),
     Version,
+    /// Multi-sig admin configuration
+    MultiSigConfig,
+    /// Pending multi-sig action keyed by action ID
     MultiSigConfig,
     PendingAction(u64),
 }
@@ -220,6 +294,16 @@ fn write_snapshot(
         .persistent()
         .set(&DataKey::Snapshots, snapshots);
     env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
+}
+
+fn get_next_action_id(env: &Env) -> u64 {
+    let id: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::NextActionId)
+        .unwrap_or(0);
+    env.storage().instance().set(&DataKey::NextActionId, &(id + 1));
+    id
 }
 
 // ── Contract metadata types ───────────────────────────────────────────────────
@@ -620,13 +704,27 @@ impl AnalyticsContract {
         if caller != admin {
             return Err(Error::Unauthorized.log_context(&env, "pause: caller is not the admin"));
         }
+
+        let timestamp = env.ledger().timestamp();
+
+        // Store structured pause info for transparency
+        let pause_info = PauseInfo {
+            paused: true,
+            reason: reason.clone(),
+            paused_at: timestamp,
+            paused_by: caller.clone(),
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::PauseInfo, &pause_info);
         env.storage().instance().set(&DataKey::Paused, &true);
+
         env.events().publish(
             (symbol_short!("pause"), caller.clone()),
             PauseEvent {
                 paused_by: caller,
                 reason,
-                timestamp: env.ledger().timestamp(),
+                timestamp,
                 ledger_sequence: env.ledger().sequence(),
             },
         );
@@ -640,13 +738,27 @@ impl AnalyticsContract {
         if caller != admin {
             return Err(Error::Unauthorized.log_context(&env, "unpause: caller is not the admin"));
         }
+
+        let timestamp = env.ledger().timestamp();
+
+        // Update pause info to reflect the unpaused state
+        let pause_info = PauseInfo {
+            paused: false,
+            reason: reason.clone(),
+            paused_at: timestamp,
+            paused_by: caller.clone(),
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::PauseInfo, &pause_info);
         env.storage().instance().set(&DataKey::Paused, &false);
+
         env.events().publish(
             (symbol_short!("unpause"), caller.clone()),
             UnpauseEvent {
                 unpaused_by: caller,
                 reason,
-                timestamp: env.ledger().timestamp(),
+                timestamp,
                 ledger_sequence: env.ledger().sequence(),
             },
         );
@@ -811,28 +923,9 @@ impl AnalyticsContract {
                 .log_context(&env, "propose_admin_change: caller is not the admin"));
         }
 
-        let action_id: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::NextActionId)
-            .unwrap_or(0u64);
+        let action_id = get_next_action_id(&env);
 
         let now = env.ledger().timestamp();
-        let action = TimelockAction {
-            action_type: String::from_str(&env, "set_admin"),
-            new_admin: new_admin.clone(),
-            proposer: proposer.clone(),
-            proposed_at: now,
-            executable_at: now + TIMELOCK_DELAY,
-            executed: false,
-        };
-
-        env.storage()
-            .persistent()
-            .set(&DataKey::TimelockAction(action_id), &action);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextActionId, &(action_id + 1));
 
         env.events().publish(
             (symbol_short!("propose"), proposer),
@@ -971,33 +1064,31 @@ impl AnalyticsContract {
             .unwrap_or(false)
     }
 
+    /// Get detailed pause information including reason, timestamp, and who paused.
+    /// Returns `None` if the contract has never been paused.
+    pub fn get_pause_info(env: Env) -> Option<PauseInfo> {
+        env.storage().instance().get(&DataKey::PauseInfo)
+    }
+
     // =========================================================================
     // Multi-Sig Admin Support
     // =========================================================================
 
-    /// Initialize multi-sig configuration. Only the current single admin can call this.
-    pub fn initialize_multisig(
-        env: Env,
-        caller: Address,
-        admins: Vec<Address>,
-        threshold: u32,
-    ) -> Result<(), Error> {
-        caller.require_auth();
-        let admin = require_admin(&env)?;
-        if caller != admin {
-            return Err(Error::Unauthorized
-                .log_context(&env, "initialize_multisig: caller is not the admin"));
-        }
+    /// Initialize multi-sig configuration.
+    pub fn initialize_multisig(env: Env, admins: Vec<Address>, threshold: u32) -> Result<(), Error> {
         if threshold == 0 || threshold > admins.len() as u32 {
+            panic!("Invalid threshold: must be between 1 and the number of admins");
             return Err(Error::InvalidThreshold.log_context(
                 &env,
                 "initialize_multisig: threshold must be between 1 and number of admins",
             ));
         }
+
         let config = MultiSigConfig { admins, threshold };
         env.storage()
             .instance()
             .set(&DataKey::MultiSigConfig, &config);
+
         Ok(())
     }
 
@@ -1031,29 +1122,22 @@ impl AnalyticsContract {
                 .log_context(&env, "propose_action: proposer is not a multisig admin"));
         }
 
-        let action_id: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::NextActionId)
-            .unwrap_or(0u64);
+        let action_id = get_next_action_id(&env);
 
         let mut sigs = Vec::new(&env);
-        sigs.push_back(proposer);
+        sigs.push_back(proposer.clone());
 
         let pending = PendingAction {
             action_id,
             action_type,
             signatures: sigs,
             created_at: env.ledger().timestamp(),
-            expires_at: env.ledger().timestamp() + 86_400,
+            expires_at: env.ledger().timestamp() + 86_400, // 24 hours
         };
 
         env.storage()
             .persistent()
             .set(&DataKey::PendingAction(action_id), &pending);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextActionId, &(action_id + 1));
 
         Ok(action_id)
     }
@@ -1155,6 +1239,10 @@ mod fuzz_tests {
 
     /// Structured random input for fuzz testing
     #[derive(TypeGenerator, Debug)]
+    use arbitrary::Arbitrary;
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+
+    #[derive(Arbitrary, Debug)]
     struct FuzzInput {
         epoch: u64,
         hash: [u8; 32],
@@ -1299,6 +1387,10 @@ mod fuzz_tests {
 
                 // Latest epoch must remain unchanged (still epoch_a)
                 assert_eq!(client.get_latest_epoch(), input.epoch_a);
+            });
+    }
+                // Should not panic
+                let _ = client.try_submit_snapshot(&input.epoch, &hash, &admin);
             });
     }
 }
