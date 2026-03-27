@@ -220,7 +220,7 @@ pub struct SnapshotsPrunedEvent {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TimelockAction {
     pub action_type: String,
-    pub new_admin: Address,
+    pub action_data: BytesN<32>,
     pub proposer: Address,
     pub proposed_at: u64,
     pub executable_at: u64,
@@ -1140,114 +1140,111 @@ impl AnalyticsContract {
         proposer.require_auth();
         check_rate_limit(&env, &proposer)?;
 
-        let admin = require_admin(&env)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::AdminNotSet)?;
+        
         if proposer != admin {
-            return Err(Error::Unauthorized
-                .log_context(&env, "propose_admin_change: caller is not the admin"));
+            return Err(Error::Unauthorized);
         }
 
         let action_id = get_next_action_id(&env);
         let now = env.ledger().timestamp();
+        
         let action = TimelockAction {
-
-            action_type: String::from_str(&env, "admin_change"),
-            new_admin: new_admin.clone(),
+            action_type: String::from_str(&env, "set_admin"),
+            action_data: new_admin.to_bytes(),
             proposer: proposer.clone(),
             proposed_at: now,
             executable_at: now + TIMELOCK_DELAY,
             executed: false,
         };
-        env.storage()
-            .persistent()
-            .set(&DataKey::TimelockAction(action_id), &action);
+        
+        env.storage().persistent().set(&DataKey::TimelockAction(action_id), &action);
 
+        // Emit event
         env.events().publish(
-            (symbol_short!("propose"), proposer.clone()),
-            AdminChangeProposedEvent {
-                action_id,
-                proposer,
-                new_admin: new_admin.clone(),
-                executable_at: action.executable_at,
-            },
+            (symbol_short!("propose"), proposer),
+            (action_id, new_admin, action.executable_at),
         );
-
 
         Ok(action_id)
     }
 
-    /// Execute a timelock action after the delay has passed.
     pub fn execute_timelock_action(
         env: Env,
         executor: Address,
         action_id: u64,
     ) -> Result<(), Error> {
         executor.require_auth();
-
+        
         let mut action: TimelockAction = env
             .storage()
             .persistent()
             .get(&DataKey::TimelockAction(action_id))
-            .ok_or_else(|| {
-                Error::ActionNotFound.log_context(&env, "execute_timelock_action: action not found")
-            })?;
-
+            .ok_or(Error::ActionNotFound)?;
+        
+        // ✅ Check timelock has passed
         if env.ledger().timestamp() < action.executable_at {
-            return Err(Error::TimelockNotExpired.log_context(
-                &env,
-                "execute_timelock_action: timelock has not expired yet",
-            ));
+            return Err(Error::TimelockNotExpired);
         }
-
+        
+        // Check not already executed
         if action.executed {
-            return Err(Error::ActionAlreadyExecuted.log_context(
-                &env,
-                "execute_timelock_action: action has already been executed",
-            ));
+            return Err(Error::ActionAlreadyExecuted);
         }
-
-        env.storage()
-            .instance()
-            .set(&DataKey::Admin, &action.new_admin);
-
+        
+        // Execute action based on type
+        // Use == instead of .as_str() because soroban_sdk::String does not have .as_str()
+        if action.action_type == String::from_str(&env, "set_admin") {
+            let new_admin = Address::from_bytes(&action.action_data);
+            env.storage().instance().set(&DataKey::Admin, &new_admin);
+        } else {
+            return Err(Error::UnknownActionType);
+        }
+        
+        // Mark as executed
         action.executed = true;
-        env.storage()
-            .persistent()
-            .set(&DataKey::TimelockAction(action_id), &action);
-
+        env.storage().persistent().set(&DataKey::TimelockAction(action_id), &action);
+        
+        // Emit event
         env.events().publish(
-            (symbol_short!("execute"), executor.clone()),
-            TimelockActionExecutedEvent {
-                action_id,
-                executor,
-                new_admin: action.new_admin.clone(),
-            },
+            (symbol_short!("execute"), executor),
+            action_id,
         );
-
+        
         Ok(())
     }
 
-    /// Cancel a pending timelock action. Only the current admin can cancel.
-    pub fn cancel_timelock_action(env: Env, admin: Address, action_id: u64) -> Result<(), Error> {
+    pub fn cancel_timelock_action(
+        env: Env,
+        admin: Address,
+        action_id: u64,
+    ) -> Result<(), Error> {
         admin.require_auth();
-
-        let stored_admin = require_admin(&env)?;
+        
+        // Only admin can cancel
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::AdminNotSet)?;
+        
         if admin != stored_admin {
-            return Err(Error::Unauthorized
-                .log_context(&env, "cancel_timelock_action: caller is not the admin"));
+            return Err(Error::Unauthorized);
         }
-
-        env.storage()
-            .persistent()
-            .remove(&DataKey::TimelockAction(action_id));
-
+        
+        // Remove action
+        env.storage().persistent().remove(&DataKey::TimelockAction(action_id));
+        
+        // Emit event
         env.events().publish(
-            (symbol_short!("cancel"), admin.clone()),
-            TimelockActionCancelledEvent {
-                action_id,
-                admin,
-            },
+            (symbol_short!("cancel"), admin),
+            action_id,
         );
-
+        
         Ok(())
     }
 

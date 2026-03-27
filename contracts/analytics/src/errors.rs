@@ -54,6 +54,8 @@ pub enum Error {
     InvalidThreshold = 22,
     /// Signer is not a registered multisig admin
     SignerNotAdmin = 23,
+    /// Unknown Governance Action Type
+    UnknownActionType = 24,
 }
 
 impl Error {
@@ -94,6 +96,7 @@ impl Error {
             Error::MultiSigNotInitialized => "MultiSig configuration has not been initialized",
             Error::InvalidThreshold => "Invalid multisig threshold value",
             Error::SignerNotAdmin => "Signer is not a registered multisig admin",
+            Error::UnknownActionType => "Unknown action type",
         }
     }
 

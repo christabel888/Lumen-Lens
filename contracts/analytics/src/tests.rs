@@ -856,7 +856,7 @@ fn test_timelock_proposal() {
     let action = client.get_timelock_action(&action_id).unwrap();
 
     assert_eq!(action.proposer, admin);
-    assert_eq!(action.new_admin, new_admin);
+    assert_eq!(action.action_data, new_admin.to_bytes());
     assert_eq!(action.proposed_at, 1000);
     assert_eq!(action.executable_at, 1000 + 172_800);
     assert!(!action.executed);
@@ -1045,6 +1045,7 @@ fn test_error_descriptions_are_non_empty() {
         Error::MultiSigNotInitialized,
         Error::InvalidThreshold,
         Error::SignerNotAdmin,
+        Error::UnknownActionType,
     ];
 
     for variant in variants {
@@ -1083,6 +1084,7 @@ fn test_error_codes_are_unique() {
         Error::MultiSigNotInitialized,
         Error::InvalidThreshold,
         Error::SignerNotAdmin,
+        Error::UnknownActionType,
     ];
 
     // Use a plain std Vec — no soroban runtime needed for this pure logic check.
