@@ -264,6 +264,14 @@ fn require_admin(env: &Env) -> Result<Address, Error> {
         .ok_or_else(|| Error::NotInitialized.log_context(env, "require_admin: admin not set"))
 }
 
+/// Check if contract has been initialized
+fn require_initialized(env: &Env) -> Result<(), Error> {
+    if !env.storage().instance().has(&DataKey::Admin) {
+        return Err(Error::NotInitialized.log_context(env, "require_initialized: contract not initialized"));
+    }
+    Ok(())
+}
+
 /// Validate epoch ordering; returns the current latest epoch on success.
 fn validate_epoch(env: &Env, epoch: u64) -> Result<u64, Error> {
     if epoch == 0 {
@@ -589,6 +597,8 @@ impl AnalyticsContract {
     }
 
     /// Check whether a snapshot has expired.
+    pub fn is_snapshot_expired(env: Env, epoch: u64) -> Result<bool, Error> {
+        require_initialized(&env)?;
     ///
     /// # Panics
     /// * If contract is not initialized
@@ -601,10 +611,10 @@ impl AnalyticsContract {
             .get::<DataKey, SnapshotMetadata>(&DataKey::Snapshot(epoch))
         {
             Some(metadata) => match metadata.expires_at {
-                Some(expires_at) => env.ledger().timestamp() > expires_at,
-                None => false,
+                Some(expires_at) => Ok(env.ledger().timestamp() > expires_at),
+                None => Ok(false),
             },
-            None => false,
+            None => Ok(false),
         }
     }
 
@@ -620,6 +630,13 @@ impl AnalyticsContract {
     /// # Panics
     /// * If contract is not initialized
     /// Get snapshot metadata for a specific epoch.
+    pub fn get_snapshot(env: Env, epoch: u64) -> Result<Option<SnapshotMetadata>, Error> {
+        require_initialized(&env)?;
+        Ok(env.storage().persistent().get(&DataKey::Snapshot(epoch)))
+    }
+
+    pub fn get_latest_snapshot(env: Env) -> Result<Option<SnapshotMetadata>, Error> {
+        require_initialized(&env)?;
     pub fn get_snapshot(env: Env, epoch: u64) -> Option<SnapshotMetadata> {
         require_initialized(&env);
         env.storage().persistent().get(&DataKey::Snapshot(epoch))
@@ -633,29 +650,38 @@ impl AnalyticsContract {
             .get(&DataKey::LatestEpoch)
             .unwrap_or(0);
         if latest_epoch == 0 {
-            return None;
+            return Ok(None);
         }
-        env.storage()
+        Ok(env.storage()
             .persistent()
-            .get(&DataKey::Snapshot(latest_epoch))
+            .get(&DataKey::Snapshot(latest_epoch)))
     }
 
+    pub fn get_snapshot_history(env: Env) -> Result<Map<u64, SnapshotMetadata>, Error> {
+        require_initialized(&env)?;
+        Ok(env.storage()
     pub fn get_snapshot_history(env: Env) -> Map<u64, SnapshotMetadata> {
         require_initialized(&env);
         env.storage()
             .persistent()
             .get(&DataKey::Snapshots)
-            .unwrap_or_else(|| Map::new(&env))
+            .unwrap_or_else(|| Map::new(&env)))
     }
 
+    pub fn get_latest_epoch(env: Env) -> Result<u64, Error> {
+        require_initialized(&env)?;
+        Ok(env.storage()
     pub fn get_latest_epoch(env: Env) -> u64 {
         require_initialized(&env);
         env.storage()
             .instance()
             .get(&DataKey::LatestEpoch)
-            .unwrap_or(0)
+            .unwrap_or(0))
     }
 
+    pub fn get_all_epochs(env: Env) -> Result<Vec<u64>, Error> {
+        require_initialized(&env)?;
+        let snapshots = Self::get_snapshot_history(env.clone())?;
     pub fn get_all_epochs(env: Env) -> soroban_sdk::Vec<u64> {
         require_initialized(&env);
     pub fn get_all_epochs(env: Env) -> Vec<u64> {
@@ -664,7 +690,7 @@ impl AnalyticsContract {
         for (epoch, _) in snapshots.iter() {
             epochs.push_back(epoch);
         }
-        epochs
+        Ok(epochs)
     }
 
     /// Returns a paginated page of snapshots ordered by epoch.
@@ -672,7 +698,8 @@ impl AnalyticsContract {
         env: Env,
         limit: u32,
         cursor: Option<u64>,
-    ) -> PaginatedSnapshots {
+    ) -> Result<PaginatedSnapshots, Error> {
+        require_initialized(&env)?;
         let snapshots: Map<u64, SnapshotMetadata> = env
             .storage()
             .persistent()
@@ -701,16 +728,17 @@ impl AnalyticsContract {
             }
         }
 
-        PaginatedSnapshots {
+        Ok(PaginatedSnapshots {
             snapshots: results,
             total_count: latest_epoch,
             has_more: next_cursor.is_some(),
             next_cursor,
-        }
+        })
     }
 
-    pub fn get_admin(env: Env) -> Option<Address> {
-        env.storage().instance().get(&DataKey::Admin)
+    pub fn get_admin(env: Env) -> Result<Option<Address>, Error> {
+        require_initialized(&env)?;
+        Ok(env.storage().instance().get(&DataKey::Admin))
     }
 
     pub fn getversion(env: Env) -> String {
@@ -811,8 +839,9 @@ impl AnalyticsContract {
         Ok(())
     }
 
-    pub fn get_governance(env: Env) -> Option<Address> {
-        env.storage().instance().get(&DataKey::Governance)
+    pub fn get_governance(env: Env) -> Result<Option<Address>, Error> {
+        require_initialized(&env)?;
+        Ok(env.storage().instance().get(&DataKey::Governance))
     }
 
     pub fn set_admin_by_governance(
@@ -942,7 +971,8 @@ impl AnalyticsContract {
     ) -> Vec<Option<SnapshotMetadata>> {
         require_initialized(&env);
     /// Batch get multiple snapshots by epoch.
-    pub fn batch_get_snapshots(env: Env, epochs: Vec<u64>) -> Vec<Option<SnapshotMetadata>> {
+    pub fn batch_get_snapshots(env: Env, epochs: Vec<u64>) -> Result<Vec<Option<SnapshotMetadata>>, Error> {
+        require_initialized(&env)?;
         let snapshots: Map<u64, SnapshotMetadata> = env
             .storage()
             .persistent()
@@ -953,7 +983,7 @@ impl AnalyticsContract {
         for epoch in epochs.iter() {
             results.push_back(snapshots.get(epoch));
         }
-        results
+        Ok(results)
     }
 
     /// Propose an admin change with a 48-hour timelock.
@@ -1050,11 +1080,11 @@ impl AnalyticsContract {
         Ok(())
     }
 
-    /// Get a timelock action by ID.
-    pub fn get_timelock_action(env: Env, action_id: u64) -> Option<TimelockAction> {
-        env.storage()
+    pub fn get_timelock_action(env: Env, action_id: u64) -> Result<Option<TimelockAction>, Error> {
+        require_initialized(&env)?;
+        Ok(env.storage()
             .persistent()
-            .get(&DataKey::TimelockAction(action_id))
+            .get(&DataKey::TimelockAction(action_id)))
     }
 
     /// Prune old snapshots, keeping only the last N epochs. Admin-only.
@@ -1104,12 +1134,12 @@ impl AnalyticsContract {
         Ok(removed)
     }
 
-    /// Check if contract is paused.
-    pub fn is_paused(env: Env) -> bool {
-        env.storage()
+    pub fn is_paused(env: Env) -> Result<bool, Error> {
+        require_initialized(&env)?;
+        Ok(env.storage()
             .instance()
             .get(&DataKey::Paused)
-            .unwrap_or(false)
+            .unwrap_or(false))
     }
 
     /// Get detailed pause information including reason, timestamp, and who paused.
@@ -1140,9 +1170,9 @@ impl AnalyticsContract {
         Ok(())
     }
 
-    /// Get the current multi-sig configuration.
-    pub fn get_multisig_config(env: Env) -> Option<MultiSigConfig> {
-        env.storage().instance().get(&DataKey::MultiSigConfig)
+    pub fn get_multisig_config(env: Env) -> Result<Option<MultiSigConfig>, Error> {
+        require_initialized(&env)?;
+        Ok(env.storage().instance().get(&DataKey::MultiSigConfig))
     }
 
     /// Propose a new multi-sig action. The proposer automatically adds their signature.
@@ -1232,10 +1262,11 @@ impl AnalyticsContract {
     }
 
     /// Get a pending action by ID.
-    pub fn get_pending_action(env: Env, action_id: u64) -> Option<PendingAction> {
-        env.storage()
+    pub fn get_pending_action(env: Env, action_id: u64) -> Result<Option<PendingAction>, Error> {
+        require_initialized(&env)?;
+        Ok(env.storage()
             .persistent()
-            .get(&DataKey::PendingAction(action_id))
+            .get(&DataKey::PendingAction(action_id)))
     }
 
     // =========================================================================
