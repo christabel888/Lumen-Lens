@@ -3,11 +3,9 @@
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env, Map, String,
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String,
     Vec,
 };
-
-const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -158,23 +156,6 @@ pub struct PaginatedSnapshots {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MultiSigConfig {
-    pub admins: Vec<Address>,
-    pub threshold: u32,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PendingAction {
-    pub action_id: u64,
-    pub action_type: String,
-    pub signatures: Vec<Address>,
-    pub created_at: u64,
-    pub expires_at: u64,
-}
-
-#[contracttype]
 pub enum DataKey {
     Admin,
     Snapshots,
@@ -192,7 +173,6 @@ pub enum DataKey {
     /// Multi-sig admin configuration
     MultiSigConfig,
     /// Pending multi-sig action keyed by action ID
-    MultiSigConfig,
     PendingAction(u64),
 }
 
@@ -1019,8 +999,6 @@ impl AnalyticsContract {
 
         if threshold == 0 || threshold > admins.len() as u32 {
             panic!("Invalid threshold: must be between 1 and the number of admins");
-        if threshold == 0 || threshold > admins.len() {
-            panic!("Invalid threshold: must be > 0 and <= number of admins");
         }
 
         let config = MultiSigConfig { admins, threshold };
