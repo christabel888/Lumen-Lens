@@ -75,6 +75,7 @@ pub enum DataKey {
     ProposalCount,
     Quorum,
     VotingPeriod,
+    Version,
     Proposals,
     Votes(u64),
     VoteTally(u64),
@@ -130,7 +131,17 @@ impl GovernanceContract {
         env.storage()
             .instance()
             .set(&DataKey::VotingPeriod, &voting_period);
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &String::from_str(&env, VERSION));
         Ok(())
+    }
+
+    pub fn get_version(env: Env) -> String {
+        env.storage()
+            .instance()
+            .get(&DataKey::Version)
+            .unwrap_or_else(|| String::from_str(&env, VERSION))
     }
 
     /// Create a new governance proposal. Only the admin can create proposals.

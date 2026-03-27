@@ -17,6 +17,100 @@ fn create_test_hash(env: &Env, value: u8) -> BytesN<32> {
 // ============================================================================
 
 #[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_functions_require_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call get_snapshot before initialization should panic
+    client.get_snapshot(&1u64);
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_get_latest_snapshot_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call get_latest_snapshot before initialization should panic
+    client.get_latest_snapshot();
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_get_snapshot_history_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call get_snapshot_history before initialization should panic
+    client.get_snapshot_history();
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_get_latest_epoch_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call get_latest_epoch before initialization should panic
+    client.get_latest_epoch();
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_get_all_epochs_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call get_all_epochs before initialization should panic
+    client.get_all_epochs();
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_is_snapshot_expired_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call is_snapshot_expired before initialization should panic
+    client.is_snapshot_expired(&1u64);
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_batch_get_snapshots_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let mut epochs = Vec::new(&env);
+    epochs.push_back(1u64);
+
+    // Attempting to call batch_get_snapshots before initialization should panic
+    client.batch_get_snapshots(&epochs);
+}
+
+#[test]
 fn test_initialization() {
     let env = Env::default();
     env.mock_all_auths();
@@ -1246,6 +1340,105 @@ fn test_functions_require_initialization() {
 
 #[test]
 fn test_uninitialized_contract_errors() {
+// Multi-Sig Tests
+// ============================================================================
+
+#[test]
+fn test_multisig_initialization() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let admin1 = Address::generate(&env);
+    let admin2 = Address::generate(&env);
+    let admins = vec![&env, admin1.clone(), admin2.clone()];
+    let threshold = 2;
+
+    client.initialize_multisig(&admins, &threshold);
+
+    let config = client.get_multisig_config().unwrap();
+    assert_eq!(config.admins.len(), 2);
+    assert_eq!(config.threshold, 2);
+    assert!(config.admins.contains(&admin1));
+    assert!(config.admins.contains(&admin2));
+}
+
+#[test]
+fn test_multisig_proposal() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let admin1 = Address::generate(&env);
+    let admin2 = Address::generate(&env);
+    let admins = vec![&env, admin1.clone(), admin2.clone()];
+    client.initialize_multisig(&admins, &2);
+
+    let action_type = soroban_sdk::String::from_str(&env, "upgrade");
+    let action_data = BytesN::from_array(&env, &[0u8; 32]);
+    let action_id = client.propose_action(&admin1, &action_type, &action_data);
+
+    let pending = client.get_pending_action(&action_id).unwrap();
+    assert_eq!(pending.action_id, action_id);
+    assert_eq!(pending.signatures.len(), 1);
+    assert_eq!(pending.signatures.get(0).unwrap(), admin1);
+}
+
+#[test]
+fn test_multisig_threshold() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let admin1 = Address::generate(&env);
+    let admin2 = Address::generate(&env);
+    let admins = vec![&env, admin1.clone(), admin2.clone()];
+    client.initialize_multisig(&admins, &2);
+
+    let action_type = soroban_sdk::String::from_str(&env, "test");
+    let action_data = BytesN::from_array(&env, &[0u8; 32]);
+    let action_id = client.propose_action(&admin1, &action_type, &action_data);
+
+    // First signature already added by proposer
+    let reached_first = client.sign_action(&admin1, &action_id);
+    assert!(!reached_first); // Already signed, still 1/2
+
+    // Second signature
+    let reached_second = client.sign_action(&admin2, &action_id);
+    assert!(reached_second); // Now 2/2
+
+    let pending = client.get_pending_action(&action_id).unwrap();
+    assert_eq!(pending.signatures.len(), 2);
+#[test]
+fn test_pause_with_reason() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(12345);
+
+    let reason = soroban_sdk::String::from_str(&env, "Emergency maintenance - fixing critical bug");
+    client.pause(&admin, &reason);
+
+    assert!(client.is_paused());
+
+    let info = client
+        .get_pause_info()
+        .expect("pause info must be set after pause");
+    assert!(info.paused);
+    assert_eq!(info.reason, reason);
+    assert_eq!(info.paused_at, 12345);
+    assert_eq!(info.paused_by, admin);
+}
+
+#[test]
+fn test_get_pause_info_after_unpause() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -1269,6 +1462,33 @@ fn test_uninitialized_contract_errors() {
 
 #[test]
 fn test_functions_work_after_initialization() {
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    client.pause(
+        &admin,
+        &soroban_sdk::String::from_str(&env, "scheduled downtime"),
+    );
+
+    env.ledger().set_timestamp(2000);
+    let unpause_reason = soroban_sdk::String::from_str(&env, "maintenance complete");
+    client.unpause(&admin, &unpause_reason);
+
+    assert!(!client.is_paused());
+
+    let info = client
+        .get_pause_info()
+        .expect("pause info must be set after unpause");
+    assert!(!info.paused);
+    assert_eq!(info.reason, unpause_reason);
+    assert_eq!(info.paused_at, 2000);
+    assert_eq!(info.paused_by, admin);
+}
+
+#[test]
+fn test_get_pause_info_none_when_never_paused() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -1276,26 +1496,8 @@ fn test_functions_work_after_initialization() {
     let client = AnalyticsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
 
-    // Initialize the contract
     client.initialize(&admin);
 
-    // Now all read functions should work
-    assert_eq!(client.get_admin(), Ok(Some(admin.clone())));
-    assert_eq!(client.get_latest_epoch(), Ok(0));
-    assert_eq!(client.get_snapshot_history(), Ok(soroban_sdk::Map::new(&env)));
-    assert_eq!(client.get_all_epochs(), Ok(Vec::new(&env)));
-    assert_eq!(client.is_paused(), Ok(false));
-    assert_eq!(client.get_governance(), Ok(None));
-    assert_eq!(client.get_multisig_config(), Ok(None));
-    assert_eq!(client.get_latest_snapshot(), Ok(None));
-    assert_eq!(client.get_snapshot(&1u64), Ok(None));
-
-    // Submit a snapshot and verify
-    env.ledger().set_timestamp(1000);
-    let hash = create_test_hash(&env, 1);
-    client.submit_snapshot(&1u64, &hash, &admin);
-
-    assert_eq!(client.get_latest_epoch(), Ok(1));
-    assert!(client.get_snapshot(&1u64).is_ok());
-    assert!(client.get_all_epochs().is_ok());
+    // Contract has never been paused — info should be None
+    assert!(client.get_pause_info().is_none());
 }
