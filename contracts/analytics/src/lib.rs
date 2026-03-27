@@ -484,6 +484,16 @@ impl AnalyticsContract {
 
         let latest = validate_epoch(&env, epoch)?;
 
+        // ─────────────────────────────────────────────────────────────────────
+        // Validate hash is not all zeros (security-critical)
+        // ─────────────────────────────────────────────────────────────────────
+        let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
+        if hash == zero_hash {
+            return Err(
+                Error::InvalidHashZero.log_context(&env, "submit_snapshot: hash must not be all zeros")
+            );
+        }
+
         let timestamp = env.ledger().timestamp();
         let ledger_sequence = env.ledger().sequence();
         let metadata = SnapshotMetadata {
