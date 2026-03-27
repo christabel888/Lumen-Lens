@@ -1145,3 +1145,36 @@ impl AnalyticsContract {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod fuzz_tests {
+    use super::*;
+    use arbitrary::Arbitrary;
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+
+    #[derive(Arbitrary, Debug)]
+    struct FuzzInput {
+        epoch: u64,
+        hash: [u8; 32],
+    }
+
+    #[test]
+    fn fuzz_submit_snapshot() {
+        bolero::check!()
+            .with_type::<FuzzInput>()
+            .for_each(|input| {
+                let env = Env::default();
+                let contract_id = env.register_contract(None, AnalyticsContract);
+                let client = AnalyticsContractClient::new(&env, &contract_id);
+
+                let admin = Address::generate(&env);
+                env.mock_all_auths();
+                client.initialize(&admin);
+
+                let hash = BytesN::from_array(&env, &input.hash);
+
+                // Should not panic
+                let _ = client.try_submit_snapshot(&input.epoch, &hash, &admin);
+            });
+    }
+}
