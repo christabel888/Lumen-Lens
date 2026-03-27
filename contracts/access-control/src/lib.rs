@@ -1,7 +1,19 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
+    Symbol, Vec,
+};
 
-#[derive(Clone)]
+pub const VERSION: &str = "0.1.0";
+
+#[contracterror]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum Error {
+    Unauthorized = 1,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum Role {
     Admin,
@@ -20,13 +32,63 @@ pub struct Permission {
 pub enum DataKey {
     Roles(Address),
     Permissions(Role),
+    Version,
+}
+
+// ---------------------------------------------------------------------------
+// Event types — emitted on every access-control mutation for audit trails
+// ---------------------------------------------------------------------------
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoleGrantedEvent {
+    pub admin: Address,
+    pub user: Address,
+    pub role: Role,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoleRevokedEvent {
+    pub admin: Address,
+    pub user: Address,
+    pub role: Role,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PermissionGrantedEvent {
+    pub admin: Address,
+    pub role: Role,
+    pub function: Symbol,
+}
+
+/// Extended contract metadata for public disclosure
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct PublicMetadata {
+    pub name: soroban_sdk::String,
+    pub version: soroban_sdk::String,
+    pub author: soroban_sdk::String,
+    pub description: soroban_sdk::String,
+    pub repository: soroban_sdk::String,
+    pub license: soroban_sdk::String,
+}
+
+/// Contract info combining metadata with runtime state
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ContractInfo {
+    pub metadata: PublicMetadata,
+    pub initialized: bool,
+    pub total_roles: u32,
 }
 
 #[contract]
-pub struct AccessControl;
+pub struct AccessControlContract;
 
 #[contractimpl]
-impl AccessControl {
+impl AccessControlContract {
     pub fn initialize(env: Env, admin: Address) {
         admin.require_auth();
         let mut roles = Vec::new(&env);
@@ -36,24 +98,34 @@ impl AccessControl {
             .set(&DataKey::Roles(admin), &roles);
     }
 
-    pub fn grant_role(env: Env, caller: Address, user: Address, role: Role) {
+    pub fn grant_role(env: Env, caller: Address, user: Address, role: Role) -> Result<(), Error> {
         caller.require_auth();
-        Self::require_role(&env, &caller, Role::Admin);
+        Self::require_role(&env, &caller, Role::Admin)?;
 
         let mut roles = env
             .storage()
             .persistent()
             .get::<DataKey, Vec<Role>>(&DataKey::Roles(user.clone()))
             .unwrap_or(Vec::new(&env));
-        roles.push_back(role);
+        roles.push_back(role.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::Roles(user), &roles);
+            .set(&DataKey::Roles(user.clone()), &roles);
+
+        env.events().publish(
+            (symbol_short!("role_grnt"), user.clone()),
+            RoleGrantedEvent {
+                admin: caller,
+                user,
+                role,
+            },
+        );
+        Ok(())
     }
 
-    pub fn revoke_role(env: Env, caller: Address, user: Address, role: Role) {
+    pub fn revoke_role(env: Env, caller: Address, user: Address, role: Role) -> Result<(), Error> {
         caller.require_auth();
-        Self::require_role(&env, &caller, Role::Admin);
+        Self::require_role(&env, &caller, Role::Admin)?;
 
         if let Some(roles) = env
             .storage()
@@ -68,8 +140,18 @@ impl AccessControl {
             }
             env.storage()
                 .persistent()
-                .set(&DataKey::Roles(user), &new_roles);
+                .set(&DataKey::Roles(user.clone()), &new_roles);
+
+            env.events().publish(
+                (symbol_short!("role_rvk"), user.clone()),
+                RoleRevokedEvent {
+                    admin: caller,
+                    user,
+                    role,
+                },
+            );
         }
+        Ok(())
     }
 
     pub fn has_role(env: Env, user: Address, role: Role) -> bool {
@@ -87,19 +169,34 @@ impl AccessControl {
         false
     }
 
-    pub fn grant_permission(env: Env, caller: Address, role: Role, function: Symbol) {
+    pub fn grant_permission(
+        env: Env,
+        caller: Address,
+        role: Role,
+        function: Symbol,
+    ) -> Result<(), Error> {
         caller.require_auth();
-        Self::require_role(&env, &caller, Role::Admin);
+        Self::require_role(&env, &caller, Role::Admin)?;
 
         let mut perms = env
             .storage()
             .persistent()
             .get::<DataKey, Vec<Symbol>>(&DataKey::Permissions(role.clone()))
             .unwrap_or(Vec::new(&env));
-        perms.push_back(function);
+        perms.push_back(function.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::Permissions(role), &perms);
+            .set(&DataKey::Permissions(role.clone()), &perms);
+
+        env.events().publish(
+            (symbol_short!("perm_grnt"), role.clone()),
+            PermissionGrantedEvent {
+                admin: caller,
+                role,
+                function,
+            },
+        );
+        Ok(())
     }
 
     pub fn check_permission(env: Env, user: Address, function: Symbol) -> bool {
@@ -129,10 +226,11 @@ impl AccessControl {
         false
     }
 
-    fn require_role(env: &Env, user: &Address, role: Role) {
+    fn require_role(env: &Env, user: &Address, role: Role) -> Result<(), Error> {
         if !Self::has_role(env.clone(), user.clone(), role) {
-            panic!("Unauthorized: missing required role");
+            return Err(Error::Unauthorized);
         }
+        Ok(())
     }
 
     fn roles_equal(a: &Role, b: &Role) -> bool {
@@ -143,18 +241,48 @@ impl AccessControl {
                 | (Role::Viewer, Role::Viewer)
         )
     }
+
+    /// Get public contract metadata
+    pub fn get_metadata(env: Env) -> PublicMetadata {
+        PublicMetadata {
+            name: soroban_sdk::String::from_str(&env, "Stellar Insights Access Control"),
+            version: soroban_sdk::String::from_str(&env, VERSION),
+            author: soroban_sdk::String::from_str(&env, "Stellar Insights Team"),
+            description: soroban_sdk::String::from_str(
+                &env,
+                "Role-based access control contract for Stellar Insights",
+            ),
+            repository: soroban_sdk::String::from_str(&env, "https://github.com/stellar-insights/contracts"),
+            license: soroban_sdk::String::from_str(&env, "MIT"),
+        }
+    }
+
+    /// Get comprehensive contract information
+    pub fn get_contract_info(env: Env) -> ContractInfo {
+        // Check if contract is initialized by looking for the version key
+        let initialized = env.storage().persistent().has(&DataKey::Version);
+        
+        ContractInfo {
+            metadata: Self::get_metadata(env),
+            initialized,
+            total_roles: 0, 
+        }
+    }
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::expect_used)]
+#[allow(clippy::panic)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Env};
+    use soroban_sdk::{testutils::{Address as _, Events}, Env, Val, Vec};
 
     macro_rules! setup {
         ($env:ident, $client:ident, $admin:ident) => {
             let $env = Env::default();
-            let contract_id = $env.register_contract(None, AccessControl);
-            let $client = AccessControlClient::new(&$env, &contract_id);
+            let contract_id = $env.register_contract(None, AccessControlContract);
+            let $client = AccessControlContractClient::new(&$env, &contract_id);
             let $admin = Address::generate(&$env);
             $env.mock_all_auths();
             $client.initialize(&$admin);
@@ -444,5 +572,159 @@ mod test {
         client.grant_permission(&admin, &Role::Operator, &func);
         assert!(client.check_permission(&operator, &func));
         assert!(!client.check_permission(&viewer, &func));
+    }
+
+    // =========================================================================
+    // event emission
+    // =========================================================================
+
+    #[test]
+    fn test_grant_role_emits_event() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+        client.grant_role(&admin, &user, &Role::Operator);
+
+        let events = env.events().all();
+        assert!(!events.is_empty());
+        // The last event should be the role_grnt event for the user grant
+        // (initialize emits nothing, so only the grant_role event is present)
+        let (topics, data): (soroban_sdk::Vec<Val>, RoleGrantedEvent) =
+            events.last().map(|(_, t, d)| (t, soroban_sdk::FromVal::from_val(&env, &d))).unwrap();
+        assert_eq!(data.user, user);
+        assert_eq!(data.admin, admin);
+        assert!(matches!(data.role, Role::Operator));
+        // First topic is the symbol "role_grnt"
+        let topic0: Symbol = soroban_sdk::FromVal::from_val(&env, &topics.get(0).unwrap());
+        assert_eq!(topic0, symbol_short!("role_grnt"));
+    }
+
+    #[test]
+    fn test_revoke_role_emits_event() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+        client.grant_role(&admin, &user, &Role::Operator);
+        env.events().all(); // clear snapshot reference point
+
+        client.revoke_role(&admin, &user, &Role::Operator);
+
+        let events = env.events().all();
+        let revoke_event = events.iter().find(|(_, topics, _)| {
+            if topics.is_empty() {
+                return false;
+            }
+            let t: Symbol = soroban_sdk::FromVal::from_val(&env, &topics.get(0).unwrap());
+            t == symbol_short!("role_rvk")
+        });
+        assert!(revoke_event.is_some(), "expected role_rvk event");
+        let (_, _, data_val) = revoke_event.unwrap();
+        let data: RoleRevokedEvent = soroban_sdk::FromVal::from_val(&env, &data_val);
+        assert_eq!(data.user, user);
+        assert_eq!(data.admin, admin);
+        assert!(matches!(data.role, Role::Operator));
+    }
+
+    #[test]
+    fn test_revoke_nonexistent_role_emits_no_event() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+        // revoke a role the user never had — should be a no-op with no event
+        client.revoke_role(&admin, &user, &Role::Operator);
+
+        let events = env.events().all();
+        let revoke_event = events.iter().find(|(_, topics, _)| {
+            if topics.is_empty() {
+                return false;
+            }
+            let t: Symbol = soroban_sdk::FromVal::from_val(&env, &topics.get(0).unwrap());
+            t == symbol_short!("role_rvk")
+        });
+        assert!(revoke_event.is_none(), "no event expected for no-op revoke");
+    }
+
+    #[test]
+    fn test_grant_permission_emits_event() {
+        setup!(env, client, admin);
+        let func = symbol_short!("transfer");
+        client.grant_permission(&admin, &Role::Operator, &func);
+
+        let events = env.events().all();
+        let perm_event = events.iter().find(|(_, topics, _)| {
+            if topics.is_empty() {
+                return false;
+            }
+            let t: Symbol = soroban_sdk::FromVal::from_val(&env, &topics.get(0).unwrap());
+            t == symbol_short!("perm_grnt")
+        });
+        assert!(perm_event.is_some(), "expected perm_grnt event");
+        let (_, _, data_val) = perm_event.unwrap();
+        let data: PermissionGrantedEvent = soroban_sdk::FromVal::from_val(&env, &data_val);
+        assert_eq!(data.admin, admin);
+        assert_eq!(data.function, func);
+        assert!(matches!(data.role, Role::Operator));
+    }
+
+    #[test]
+    fn test_grant_role_unauthorized_issue_689() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AccessControlContract);
+        let client = AccessControlContractClient::new(&env, &contract_id);
+        
+        let admin = Address::generate(&env);
+        let user = Address::generate(&env);
+        let unauthorized = Address::generate(&env);
+        
+        env.mock_all_auths();
+        client.initialize(&admin);
+        
+        // Should fail - unauthorized user trying to grant role
+        let result = client.try_grant_role(&unauthorized, &user, &Role::Admin);
+        assert!(result.is_err());
+    }
+    
+    #[test]
+    fn test_role_hierarchy_issue_689() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+        let target = Address::generate(&env);
+        
+        // Test that admin can grant any role
+        client.grant_role(&admin, &user, &Role::Admin);
+        assert!(client.has_role(&user, &Role::Admin));
+        
+        // Test that non-admin (Viewer) cannot grant roles
+        let viewer = Address::generate(&env);
+        client.grant_role(&admin, &viewer, &Role::Viewer);
+        let result = client.try_grant_role(&viewer, &target, &Role::Operator);
+        assert!(result.is_err());
+    }
+    
+    #[test]
+    fn test_revoke_role_issue_689() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+        
+        // Grant and then revoke
+        client.grant_role(&admin, &user, &Role::Operator);
+        assert!(client.has_role(&user, &Role::Operator));
+        
+        client.revoke_role(&admin, &user, &Role::Operator);
+        assert!(!client.has_role(&user, &Role::Operator));
+    }
+    
+    #[test]
+    fn test_check_permission_issue_689() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+        let func = symbol_short!("execute");
+        
+        client.grant_role(&admin, &user, &Role::Operator);
+        client.grant_permission(&admin, &Role::Operator, &func);
+        
+        // Test permission checking
+        assert!(client.check_permission(&user, &func));
+        
+        // Test unauthorized permission checking
+        let stranger = Address::generate(&env);
+        assert!(!client.check_permission(&stranger, &func));
     }
 }

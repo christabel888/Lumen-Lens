@@ -30,20 +30,6 @@ pub enum Error {
     /// Hash must not be all zeros
     InvalidHashZero = 12,
     /// No snapshot found for the requested epoch
-    SnapshotNotFound = 6,
-    /// Contract is paused for emergency maintenance
-    ContractPaused = 7,
-    /// Epoch must be strictly greater than latest (monotonicity violated)
-    EpochMonotonicityViolated = 8,
-    /// Contract is paused
-    ContractPaused = 9,
-    /// Contract is not paused
-    ContractNotPaused = 10,
-    /// Generic invalid hash
-    InvalidHash = 11,
-    /// Hash must not be all zeros
-    InvalidHashZero = 12,
-    /// No snapshot found for the requested epoch
     SnapshotNotFound = 13,
     /// Admin address not initialized
     AdminNotSet = 14,
