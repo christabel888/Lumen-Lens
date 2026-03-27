@@ -438,6 +438,41 @@ fn test_set_admin_by_unauthorized_user_fails() {
 }
 
 #[test]
+fn test_admin_transfer_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin1 = Address::generate(&env);
+    let admin2 = Address::generate(&env);
+
+    client.initialize(&admin1);
+    env.ledger().set_timestamp(1000);
+
+    // Transfer admin from admin1 to admin2
+    client.set_admin(&admin1, &admin2);
+
+    // Verify new admin is set
+    assert_eq!(client.get_admin(), Ok(Some(admin2.clone())));
+
+    // Verify events were emitted
+    let events = env.events().all();
+    assert!(!events.is_empty(), "Events should have been published");
+
+    // Check the event topics and data
+    let (topics, event_data) = &events[0];
+    assert_eq!(topics.len(), 2, "Event should have 2 topics");
+    
+    // Verify the event data can be decoded as AdminTransferEvent
+    let event: AdminTransferEvent = event_data.clone().unwrap();
+    assert_eq!(event.previous_admin, admin1, "Previous admin should be admin1");
+    assert_eq!(event.new_admin, admin2, "New admin should be admin2");
+    assert_eq!(event.transferred_by, admin1, "Transferred by should be admin1");
+    assert_eq!(event.timestamp, 1000, "Timestamp should match ledger timestamp");
+}
+
+#[test]
 fn test_snapshot_immutability() {
     let env = Env::default();
     env.mock_all_auths();
