@@ -158,6 +158,13 @@ pub struct TimelockAction {
     pub executed: bool,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotWithProof {
+    pub metadata: SnapshotMetadata,
+    pub proof: Vec<BytesN<32>>,
+}
+
 const TIMELOCK_DELAY: u64 = 172_800; // 48 hours in seconds
 
 /// Multi-sig configuration: list of co-admins and the signing threshold.
@@ -206,6 +213,7 @@ pub enum DataKey {
     Version,
     /// Multi-sig admin configuration
     MultiSigConfig,
+    /// Pending multi-sig action keyed by action ID
     PendingAction(u64),
 }
 
