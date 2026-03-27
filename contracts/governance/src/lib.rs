@@ -5,7 +5,10 @@ mod events;
 
 use analytics::AnalyticsContractClient;
 use errors::Error;
-use events::{emit_proposal_created, emit_proposal_finalized, emit_vote_cast};
+use events::{
+    emit_governance_initialized, emit_proposal_created, emit_proposal_executed,
+    emit_proposal_finalized, emit_vote_cast,
+};
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Map, String};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -134,6 +137,9 @@ impl GovernanceContract {
         env.storage()
             .instance()
             .set(&DataKey::Version, &String::from_str(&env, VERSION));
+
+        emit_governance_initialized(&env, admin, quorum, voting_period);
+
         Ok(())
     }
 
@@ -509,6 +515,8 @@ impl GovernanceContract {
         env.storage()
             .persistent()
             .set(&DataKey::Proposals, &proposals);
+
+        emit_proposal_executed(&env, proposal_id, caller, proposal.target_contract);
 
         Ok(())
     }

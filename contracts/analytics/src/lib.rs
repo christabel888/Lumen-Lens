@@ -1,4 +1,13 @@
-#![no_std]
+// #![no_std]
+extern crate std;
+
+
+
+
+
+
+
+
 
 mod errors;
 
@@ -67,6 +76,7 @@ const RATE_LIMIT_WINDOW: u64 = 3600; // 1 hour
 const MAX_CALLS_PER_WINDOW: u32 = 100;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 
 // ── Event payloads ────────────────────────────────────────────────────────────
 
@@ -150,6 +160,64 @@ pub struct PauseInfo {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminChangedEvent {
+    pub old_admin: Address,
+    pub new_admin: Address,
+    pub changed_by: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GovernanceChangedEvent {
+    pub old_governance: Option<Address>,
+    pub new_governance: Address,
+    pub changed_by: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MultiSigInitializedEvent {
+    pub admins: Vec<Address>,
+    pub threshold: u32,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminChangeProposedEvent {
+    pub action_id: u64,
+    pub proposer: Address,
+    pub new_admin: Address,
+    pub executable_at: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TimelockActionExecutedEvent {
+    pub action_id: u64,
+    pub executor: Address,
+    pub new_admin: Address,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TimelockActionCancelledEvent {
+    pub action_id: u64,
+    pub admin: Address,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotsPrunedEvent {
+    pub removed_count: u32,
+    pub cutoff_epoch: u64,
+    pub caller: Address,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TimelockAction {
     pub action_type: String,
     pub new_admin: Address,
@@ -157,6 +225,13 @@ pub struct TimelockAction {
     pub proposed_at: u64,
     pub executable_at: u64,
     pub executed: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotWithProof {
+    pub metadata: SnapshotMetadata,
+    pub proof: Vec<BytesN<32>>,
 }
 
 const TIMELOCK_DELAY: u64 = 172_800; // 48 hours in seconds
@@ -208,16 +283,10 @@ pub enum DataKey {
     /// Multi-sig admin configuration
     MultiSigConfig,
     /// Pending multi-sig action keyed by action ID
-    MultiSigConfig,
     PendingAction(u64),
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
 
-const DEFAULT_SNAPSHOT_TTL: u64 = 7_776_000; // 90 days in seconds
-const LEDGER_SECONDS: u64 = 5; // ~5 seconds per ledger
-const RATE_LIMIT_WINDOW: u64 = 3_600; // 1 hour
-const MAX_CALLS_PER_WINDOW: u32 = 100;
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
@@ -254,16 +323,6 @@ fn check_rate_limit(env: &Env, caller: &Address) -> Result<(), Error> {
     Ok(())
 }
 
-/// Check if the contract is initialized; panics if not.
-fn require_initialized(env: &Env) {
-    if !env.storage().instance().has(&DataKey::Admin) {
-        panic!("Contract not initialized: admin not set");
-    }
-}
-
-/// Read the admin address; panics if the contract is not initialized.
-fn require_admin(env: &Env) -> Address {
-    require_initialized(env);
 /// Read the admin address; returns `Err(Error::NotInitialized)` if not set.
 fn require_admin(env: &Env) -> Result<Address, Error> {
     env.storage()
@@ -272,13 +331,14 @@ fn require_admin(env: &Env) -> Result<Address, Error> {
         .ok_or_else(|| Error::NotInitialized.log_context(env, "require_admin: admin not set"))
 }
 
-/// Check if contract has been initialized
+/// Check if contract has been initialized.
 fn require_initialized(env: &Env) -> Result<(), Error> {
     if !env.storage().instance().has(&DataKey::Admin) {
         return Err(Error::NotInitialized.log_context(env, "require_initialized: contract not initialized"));
     }
     Ok(())
 }
+
 
 /// Validate epoch ordering; returns the current latest epoch on success.
 fn validate_epoch(env: &Env, epoch: u64) -> Result<u64, Error> {
@@ -306,6 +366,8 @@ fn validate_epoch(env: &Env, epoch: u64) -> Result<u64, Error> {
 }
 
 /// Write one snapshot to per-epoch persistent storage and update the shared map + latest epoch.
+const LEDGERS_TO_EXTEND: u32 = 518_400; // ~30 days at 5s per ledger
+
 fn write_snapshot(
     env: &Env,
     epoch: u64,
@@ -315,10 +377,20 @@ fn write_snapshot(
     env.storage()
         .persistent()
         .set(&DataKey::Snapshot(epoch), metadata);
+    env.storage().persistent().extend_ttl(
+        &DataKey::Snapshot(epoch),
+        LEDGERS_TO_EXTEND,
+        LEDGERS_TO_EXTEND,
+    );
     snapshots.set(epoch, metadata.clone());
     env.storage()
         .persistent()
         .set(&DataKey::Snapshots, snapshots);
+    env.storage().persistent().extend_ttl(
+        &DataKey::Snapshots,
+        LEDGERS_TO_EXTEND,
+        LEDGERS_TO_EXTEND,
+    );
     env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
 }
 
@@ -607,12 +679,6 @@ impl AnalyticsContract {
     /// Check whether a snapshot has expired.
     pub fn is_snapshot_expired(env: Env, epoch: u64) -> Result<bool, Error> {
         require_initialized(&env)?;
-    ///
-    /// # Panics
-    /// * If contract is not initialized
-    pub fn is_snapshot_expired(env: Env, epoch: u64) -> bool {
-        require_initialized(&env);
-        let snapshots: Map<u64, SnapshotMetadata> = env
         match env
             .storage()
             .persistent()
@@ -625,6 +691,7 @@ impl AnalyticsContract {
             None => Ok(false),
         }
     }
+
 
     /// Get snapshot metadata for a specific epoch
     ///
@@ -640,18 +707,19 @@ impl AnalyticsContract {
     /// Get snapshot metadata for a specific epoch.
     pub fn get_snapshot(env: Env, epoch: u64) -> Result<Option<SnapshotMetadata>, Error> {
         require_initialized(&env)?;
+        if env.storage().persistent().has(&DataKey::Snapshot(epoch)) {
+            env.storage().persistent().extend_ttl(
+                &DataKey::Snapshot(epoch),
+                LEDGERS_TO_EXTEND,
+                LEDGERS_TO_EXTEND,
+            );
+        }
         Ok(env.storage().persistent().get(&DataKey::Snapshot(epoch)))
     }
 
+    /// Get the latest snapshot metadata.
     pub fn get_latest_snapshot(env: Env) -> Result<Option<SnapshotMetadata>, Error> {
         require_initialized(&env)?;
-    pub fn get_snapshot(env: Env, epoch: u64) -> Option<SnapshotMetadata> {
-        require_initialized(&env);
-        env.storage().persistent().get(&DataKey::Snapshot(epoch))
-    }
-
-    pub fn get_latest_snapshot(env: Env) -> Option<SnapshotMetadata> {
-        require_initialized(&env);
         let latest_epoch: u64 = env
             .storage()
             .instance()
@@ -665,41 +733,35 @@ impl AnalyticsContract {
             .get(&DataKey::Snapshot(latest_epoch)))
     }
 
+    /// Get the entire snapshot history.
     pub fn get_snapshot_history(env: Env) -> Result<Map<u64, SnapshotMetadata>, Error> {
         require_initialized(&env)?;
         Ok(env.storage()
-    pub fn get_snapshot_history(env: Env) -> Map<u64, SnapshotMetadata> {
-        require_initialized(&env);
-        env.storage()
             .persistent()
             .get(&DataKey::Snapshots)
             .unwrap_or_else(|| Map::new(&env)))
     }
 
+    /// Get the latest epoch submitted.
     pub fn get_latest_epoch(env: Env) -> Result<u64, Error> {
         require_initialized(&env)?;
         Ok(env.storage()
-    pub fn get_latest_epoch(env: Env) -> u64 {
-        require_initialized(&env);
-        env.storage()
             .instance()
             .get(&DataKey::LatestEpoch)
             .unwrap_or(0))
     }
 
+    /// Get all submitted epochs.
     pub fn get_all_epochs(env: Env) -> Result<Vec<u64>, Error> {
         require_initialized(&env)?;
         let snapshots = Self::get_snapshot_history(env.clone())?;
-    pub fn get_all_epochs(env: Env) -> soroban_sdk::Vec<u64> {
-        require_initialized(&env);
-    pub fn get_all_epochs(env: Env) -> Vec<u64> {
-        let snapshots = Self::get_snapshot_history(env.clone());
         let mut epochs = Vec::new(&env);
         for (epoch, _) in snapshots.iter() {
             epochs.push_back(epoch);
         }
         Ok(epochs)
     }
+
 
     /// Returns a paginated page of snapshots ordered by epoch.
     pub fn get_snapshots_paginated(
@@ -744,9 +806,12 @@ impl AnalyticsContract {
         })
     }
 
-    pub fn get_admin(env: Env) -> Result<Option<Address>, Error> {
+    pub fn get_admin(env: Env) -> Result<Address, Error> {
         require_initialized(&env)?;
-        Ok(env.storage().instance().get(&DataKey::Admin))
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::AdminNotSet)
     }
 
     pub fn getversion(env: Env) -> String {
@@ -755,8 +820,8 @@ impl AnalyticsContract {
 
     pub fn set_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), Error> {
         current_admin.require_auth();
-        let admin = require_admin(&env)?;
-        if current_admin != admin {
+        let old_admin = require_admin(&env)?;
+        if current_admin != old_admin {
             return Err(
                 Error::Unauthorized.log_context(&env, "set_admin: caller is not the current admin")
             );
@@ -777,6 +842,17 @@ impl AnalyticsContract {
             },
         );
         
+
+        env.events().publish(
+            (symbol_short!("admin"), new_admin.clone()),
+            AdminChangedEvent {
+                old_admin,
+                new_admin,
+                changed_by: current_admin,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+
         Ok(())
     }
 
@@ -856,9 +932,22 @@ impl AnalyticsContract {
                 Error::Unauthorized.log_context(&env, "set_governance: caller is not the admin")
             );
         }
+
+        let old_governance: Option<Address> = env.storage().instance().get(&DataKey::Governance);
         env.storage()
             .instance()
             .set(&DataKey::Governance, &governance);
+
+        env.events().publish(
+            (symbol_short!("gov"), governance.clone()),
+            GovernanceChangedEvent {
+                old_governance,
+                new_governance: governance,
+                changed_by: caller,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+
         Ok(())
     }
 
@@ -886,11 +975,24 @@ impl AnalyticsContract {
                 "set_admin_by_governance: caller is not the governance contract",
             ));
         }
+
+        let old_admin = require_admin(&env)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+
+        env.events().publish(
+            (symbol_short!("admin"), new_admin.clone()),
+            AdminChangedEvent {
+                old_admin,
+                new_admin,
+                changed_by: caller,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+
         Ok(())
     }
 
-    pub fn set_paused_by_governance(env: Env, caller: Address, paused: bool) -> Result<(), Error> {
+     pub fn set_paused_by_governance(env: Env, caller: Address, paused: bool) -> Result<(), Error> {
         let governance: Address = env
             .storage()
             .instance()
@@ -906,6 +1008,29 @@ impl AnalyticsContract {
             ));
         }
         env.storage().instance().set(&DataKey::Paused, &paused);
+
+        if paused {
+            env.events().publish(
+                (symbol_short!("pause"), caller.clone()),
+                PauseEvent {
+                    paused_by: caller,
+                    reason: String::from_str(&env, "Paused by governance"),
+                    timestamp: env.ledger().timestamp(),
+                    ledger_sequence: env.ledger().sequence(),
+                },
+            );
+        } else {
+            env.events().publish(
+                (symbol_short!("unpause"), caller.clone()),
+                UnpauseEvent {
+                    unpaused_by: caller,
+                    reason: String::from_str(&env, "Unpaused by governance"),
+                    timestamp: env.ledger().timestamp(),
+                    ledger_sequence: env.ledger().sequence(),
+                },
+            );
+        }
+
         Ok(())
     }
 
@@ -988,11 +1113,8 @@ impl AnalyticsContract {
     ///
     /// # Panics
     /// * If contract is not initialized
-    pub fn batch_get_snapshots(
-        env: Env,
-        epochs: Vec<u64>,
-    ) -> Vec<Option<SnapshotMetadata>> {
-        require_initialized(&env);
+
+
     /// Batch get multiple snapshots by epoch.
     pub fn batch_get_snapshots(env: Env, epochs: Vec<u64>) -> Result<Vec<Option<SnapshotMetadata>>, Error> {
         require_initialized(&env)?;
@@ -1025,13 +1147,30 @@ impl AnalyticsContract {
         }
 
         let action_id = get_next_action_id(&env);
-
         let now = env.ledger().timestamp();
+        let action = TimelockAction {
+
+            action_type: String::from_str(&env, "admin_change"),
+            new_admin: new_admin.clone(),
+            proposer: proposer.clone(),
+            proposed_at: now,
+            executable_at: now + TIMELOCK_DELAY,
+            executed: false,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::TimelockAction(action_id), &action);
 
         env.events().publish(
-            (symbol_short!("propose"), proposer),
-            (action_id, new_admin, action.executable_at),
+            (symbol_short!("propose"), proposer.clone()),
+            AdminChangeProposedEvent {
+                action_id,
+                proposer,
+                new_admin: new_admin.clone(),
+                executable_at: action.executable_at,
+            },
         );
+
 
         Ok(action_id)
     }
@@ -1076,8 +1215,12 @@ impl AnalyticsContract {
             .set(&DataKey::TimelockAction(action_id), &action);
 
         env.events().publish(
-            (symbol_short!("execute"), executor),
-            (action_id, action.new_admin),
+            (symbol_short!("execute"), executor.clone()),
+            TimelockActionExecutedEvent {
+                action_id,
+                executor,
+                new_admin: action.new_admin.clone(),
+            },
         );
 
         Ok(())
@@ -1097,8 +1240,13 @@ impl AnalyticsContract {
             .persistent()
             .remove(&DataKey::TimelockAction(action_id));
 
-        env.events()
-            .publish((symbol_short!("cancel"), admin), action_id);
+        env.events().publish(
+            (symbol_short!("cancel"), admin.clone()),
+            TimelockActionCancelledEvent {
+                action_id,
+                admin,
+            },
+        );
 
         Ok(())
     }
@@ -1151,8 +1299,14 @@ impl AnalyticsContract {
             .persistent()
             .set(&DataKey::Snapshots, &snapshots);
 
-        env.events()
-            .publish((symbol_short!("prune"), caller), (removed, cutoff_epoch));
+        env.events().publish(
+            (symbol_short!("prune"), caller.clone()),
+            SnapshotsPrunedEvent {
+                removed_count: removed,
+                cutoff_epoch,
+                caller,
+            },
+        );
 
         Ok(removed)
     }
@@ -1177,18 +1331,29 @@ impl AnalyticsContract {
 
     /// Initialize multi-sig configuration.
     pub fn initialize_multisig(env: Env, admins: Vec<Address>, threshold: u32) -> Result<(), Error> {
-        if threshold == 0 || threshold > admins.len() as u32 {
-            panic!("Invalid threshold: must be between 1 and the number of admins");
+        if threshold == 0 || threshold > admins.len() {
             return Err(Error::InvalidThreshold.log_context(
                 &env,
                 "initialize_multisig: threshold must be between 1 and number of admins",
             ));
         }
 
-        let config = MultiSigConfig { admins, threshold };
+        let config = MultiSigConfig {
+            admins: admins.clone(),
+            threshold,
+        };
         env.storage()
             .instance()
             .set(&DataKey::MultiSigConfig, &config);
+
+        env.events().publish(
+            (symbol_short!("multisig"), symbol_short!("init")),
+            MultiSigInitializedEvent {
+                admins,
+                threshold,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
 
         Ok(())
     }
@@ -1333,166 +1498,6 @@ impl AnalyticsContract {
 mod tests;
 
 #[cfg(test)]
-mod fuzz_tests {
-    use super::*;
-    use bolero_generator::TypeGenerator;
-    use soroban_sdk::{Env, Address};
-    use soroban_sdk::testutils::Address as _;
+mod fuzz_tests;
 
-    /// Structured random input for fuzz testing
-    #[derive(TypeGenerator, Debug)]
-    use arbitrary::Arbitrary;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
-    #[derive(Arbitrary, Debug)]
-    struct FuzzInput {
-        epoch: u64,
-        hash: [u8; 32],
-    }
-
-    /// Two-step fuzz input for monotonicity / ordering tests
-    #[derive(TypeGenerator, Debug)]
-    struct TwoEpochInput {
-        epoch_a: u64,
-        epoch_b: u64,
-        hash_a: [u8; 32],
-        hash_b: [u8; 32],
-    }
-
-    // -----------------------------------------------------------------------
-    // 1. submit_snapshot – arbitrary inputs must never cause unexpected panics
-    // -----------------------------------------------------------------------
-    #[test]
-    fn fuzz_submit_snapshot() {
-        bolero::check!()
-            .with_type::<FuzzInput>()
-            .for_each(|input| {
-                let env = Env::default();
-                let contract_id = env.register_contract(None, AnalyticsContract);
-                let client = AnalyticsContractClient::new(&env, &contract_id);
-
-                let admin = Address::generate(&env);
-                env.mock_all_auths();
-                client.initialize(&admin);
-
-                let hash = BytesN::from_array(&env, &input.hash);
-
-                // try_submit_snapshot returns Result – domain panics (epoch=0,
-                // monotonicity violated) are acceptable; the contract must
-                // never crash in an uncontrolled/unexpected way.
-                let _ = client.try_submit_snapshot(&input.epoch, &hash, &admin);
-            });
-    }
-
-    // -----------------------------------------------------------------------
-    // 2. get_snapshot – random epoch lookups must never panic
-    // -----------------------------------------------------------------------
-    #[test]
-    fn fuzz_get_snapshot() {
-        bolero::check!()
-            .with_type::<u64>()
-            .for_each(|epoch| {
-                let env = Env::default();
-                let contract_id = env.register_contract(None, AnalyticsContract);
-                let client = AnalyticsContractClient::new(&env, &contract_id);
-
-                let admin = Address::generate(&env);
-                env.mock_all_auths();
-                client.initialize(&admin);
-
-                // Seeding with one known snapshot so storage is non-empty
-                let hash = BytesN::from_array(&env, &[42u8; 32]);
-                let _ = client.try_submit_snapshot(&1u64, &hash, &admin);
-
-                // Any arbitrary epoch lookup should return Some or None, never panic
-                let _ = client.get_snapshot(epoch);
-            });
-    }
-
-    // -----------------------------------------------------------------------
-    // 3. Sequential submits – strictly increasing epochs must always succeed
-    // -----------------------------------------------------------------------
-    #[test]
-    fn fuzz_sequential_submits() {
-        bolero::check!()
-            .with_type::<[u8; 32]>()
-            .for_each(|hash_bytes| {
-                let env = Env::default();
-                let contract_id = env.register_contract(None, AnalyticsContract);
-                let client = AnalyticsContractClient::new(&env, &contract_id);
-
-                let admin = Address::generate(&env);
-                env.mock_all_auths();
-                client.initialize(&admin);
-
-                // Submit three snapshots with guaranteed-increasing epochs
-                let epochs = [1u64, 2u64, 3u64];
-                for epoch in &epochs {
-                    let hash = BytesN::from_array(&env, hash_bytes);
-                    // Every call with a strictly greater epoch MUST succeed
-                    let result = client.try_submit_snapshot(epoch, &hash, &admin);
-                    assert!(
-                        result.is_ok(),
-                        "Expected Ok for epoch {epoch} but got Err"
-                    );
-                }
-
-                // Monotonicity invariant: latest epoch equals the last submitted
-                assert_eq!(client.get_latest_epoch(), 3u64);
-            });
-    }
-
-    // -----------------------------------------------------------------------
-    // 4. Monotonicity invariant – lower/equal epoch must always be rejected
-    // -----------------------------------------------------------------------
-    #[test]
-    fn fuzz_monotonicity_invariant() {
-        bolero::check!()
-            .with_type::<TwoEpochInput>()
-            .for_each(|input| {
-                // Only test cases where epoch_a is non-zero and epoch_b < epoch_a
-                // to exercise the rejection path
-                if input.epoch_a == 0 || input.epoch_b == 0 {
-                    return;
-                }
-                if input.epoch_b >= input.epoch_a {
-                    return;
-                }
-
-                let env = Env::default();
-                let contract_id = env.register_contract(None, AnalyticsContract);
-                let client = AnalyticsContractClient::new(&env, &contract_id);
-
-                let admin = Address::generate(&env);
-                env.mock_all_auths();
-                client.initialize(&admin);
-
-                let hash_a = BytesN::from_array(&env, &input.hash_a);
-                let hash_b = BytesN::from_array(&env, &input.hash_b);
-
-                // Submit the higher epoch first – must succeed
-                let first = client.try_submit_snapshot(&input.epoch_a, &hash_a, &admin);
-                assert!(
-                    first.is_ok(),
-                    "First submit (epoch={}) should succeed",
-                    input.epoch_a
-                );
-
-                // Submit the lower epoch second – MUST be rejected
-                let second = client.try_submit_snapshot(&input.epoch_b, &hash_b, &admin);
-                assert!(
-                    second.is_err(),
-                    "Second submit (epoch={}) should have been rejected (epoch_a={})",
-                    input.epoch_b,
-                    input.epoch_a
-                );
-
-                // Latest epoch must remain unchanged (still epoch_a)
-                assert_eq!(client.get_latest_epoch(), input.epoch_a);
-            });
-    }
-                // Should not panic
-                let _ = client.try_submit_snapshot(&input.epoch, &hash, &admin);
-            });
-    }
-}
