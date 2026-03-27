@@ -149,6 +149,64 @@ pub struct PauseInfo {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminChangedEvent {
+    pub old_admin: Address,
+    pub new_admin: Address,
+    pub changed_by: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GovernanceChangedEvent {
+    pub old_governance: Option<Address>,
+    pub new_governance: Address,
+    pub changed_by: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MultiSigInitializedEvent {
+    pub admins: Vec<Address>,
+    pub threshold: u32,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminChangeProposedEvent {
+    pub action_id: u64,
+    pub proposer: Address,
+    pub new_admin: Address,
+    pub executable_at: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TimelockActionExecutedEvent {
+    pub action_id: u64,
+    pub executor: Address,
+    pub new_admin: Address,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TimelockActionCancelledEvent {
+    pub action_id: u64,
+    pub admin: Address,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotsPrunedEvent {
+    pub removed_count: u32,
+    pub cutoff_epoch: u64,
+    pub caller: Address,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TimelockAction {
     pub action_type: String,
     pub new_admin: Address,
@@ -748,13 +806,24 @@ impl AnalyticsContract {
 
     pub fn set_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), Error> {
         current_admin.require_auth();
-        let admin = require_admin(&env)?;
-        if current_admin != admin {
+        let old_admin = require_admin(&env)?;
+        if current_admin != old_admin {
             return Err(
                 Error::Unauthorized.log_context(&env, "set_admin: caller is not the current admin")
             );
         }
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+
+        env.events().publish(
+            (symbol_short!("admin"), new_admin.clone()),
+            AdminChangedEvent {
+                old_admin,
+                new_admin,
+                changed_by: current_admin,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+
         Ok(())
     }
 
@@ -834,9 +903,22 @@ impl AnalyticsContract {
                 Error::Unauthorized.log_context(&env, "set_governance: caller is not the admin")
             );
         }
+
+        let old_governance: Option<Address> = env.storage().instance().get(&DataKey::Governance);
         env.storage()
             .instance()
             .set(&DataKey::Governance, &governance);
+
+        env.events().publish(
+            (symbol_short!("gov"), governance.clone()),
+            GovernanceChangedEvent {
+                old_governance,
+                new_governance: governance,
+                changed_by: caller,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+
         Ok(())
     }
 
@@ -864,11 +946,24 @@ impl AnalyticsContract {
                 "set_admin_by_governance: caller is not the governance contract",
             ));
         }
+
+        let old_admin = require_admin(&env)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+
+        env.events().publish(
+            (symbol_short!("admin"), new_admin.clone()),
+            AdminChangedEvent {
+                old_admin,
+                new_admin,
+                changed_by: caller,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+
         Ok(())
     }
 
-    pub fn set_paused_by_governance(env: Env, caller: Address, paused: bool) -> Result<(), Error> {
+     pub fn set_paused_by_governance(env: Env, caller: Address, paused: bool) -> Result<(), Error> {
         let governance: Address = env
             .storage()
             .instance()
@@ -884,6 +979,29 @@ impl AnalyticsContract {
             ));
         }
         env.storage().instance().set(&DataKey::Paused, &paused);
+
+        if paused {
+            env.events().publish(
+                (symbol_short!("pause"), caller.clone()),
+                PauseEvent {
+                    paused_by: caller,
+                    reason: String::from_str(&env, "Paused by governance"),
+                    timestamp: env.ledger().timestamp(),
+                    ledger_sequence: env.ledger().sequence(),
+                },
+            );
+        } else {
+            env.events().publish(
+                (symbol_short!("unpause"), caller.clone()),
+                UnpauseEvent {
+                    unpaused_by: caller,
+                    reason: String::from_str(&env, "Unpaused by governance"),
+                    timestamp: env.ledger().timestamp(),
+                    ledger_sequence: env.ledger().sequence(),
+                },
+            );
+        }
+
         Ok(())
     }
 
@@ -1015,8 +1133,13 @@ impl AnalyticsContract {
             .set(&DataKey::TimelockAction(action_id), &action);
 
         env.events().publish(
-            (symbol_short!("propose"), proposer),
-            (action_id, new_admin, action.executable_at),
+            (symbol_short!("propose"), proposer.clone()),
+            AdminChangeProposedEvent {
+                action_id,
+                proposer,
+                new_admin: new_admin.clone(),
+                executable_at: action.executable_at,
+            },
         );
 
 
@@ -1063,8 +1186,12 @@ impl AnalyticsContract {
             .set(&DataKey::TimelockAction(action_id), &action);
 
         env.events().publish(
-            (symbol_short!("execute"), executor),
-            (action_id, action.new_admin),
+            (symbol_short!("execute"), executor.clone()),
+            TimelockActionExecutedEvent {
+                action_id,
+                executor,
+                new_admin: action.new_admin.clone(),
+            },
         );
 
         Ok(())
@@ -1084,8 +1211,13 @@ impl AnalyticsContract {
             .persistent()
             .remove(&DataKey::TimelockAction(action_id));
 
-        env.events()
-            .publish((symbol_short!("cancel"), admin), action_id);
+        env.events().publish(
+            (symbol_short!("cancel"), admin.clone()),
+            TimelockActionCancelledEvent {
+                action_id,
+                admin,
+            },
+        );
 
         Ok(())
     }
@@ -1138,8 +1270,14 @@ impl AnalyticsContract {
             .persistent()
             .set(&DataKey::Snapshots, &snapshots);
 
-        env.events()
-            .publish((symbol_short!("prune"), caller), (removed, cutoff_epoch));
+        env.events().publish(
+            (symbol_short!("prune"), caller.clone()),
+            SnapshotsPrunedEvent {
+                removed_count: removed,
+                cutoff_epoch,
+                caller,
+            },
+        );
 
         Ok(removed)
     }
@@ -1171,11 +1309,22 @@ impl AnalyticsContract {
             ));
         }
 
-
-        let config = MultiSigConfig { admins, threshold };
+        let config = MultiSigConfig {
+            admins: admins.clone(),
+            threshold,
+        };
         env.storage()
             .instance()
             .set(&DataKey::MultiSigConfig, &config);
+
+        env.events().publish(
+            (symbol_short!("multisig"), symbol_short!("init")),
+            MultiSigInitializedEvent {
+                admins,
+                threshold,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
 
         Ok(())
     }
