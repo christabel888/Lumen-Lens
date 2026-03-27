@@ -13,7 +13,7 @@ fn setup_analytics(env: &Env) -> (AnalyticsContractClient, Address) {
     let client = AnalyticsContractClient::new(env, &contract_id);
     let admin = Address::generate(env);
     env.mock_all_auths();
-    client.initialize(&admin);
+    client.initialize(&admin).unwrap();
     (client, admin)
 }
 
@@ -33,6 +33,7 @@ fn make_hash(env: &Env, seed: u8) -> BytesN<32> {
 // ============================================================================
 // bench_submit_snapshot
 // Measures cost of submitting a single snapshot to AnalyticsContract.
+// Each iteration uses a fresh, strictly-increasing epoch.
 // ============================================================================
 
 fn bench_submit_snapshot(c: &mut Criterion) {
@@ -43,7 +44,9 @@ fn bench_submit_snapshot(c: &mut Criterion) {
     c.bench_function("analytics::submit_snapshot", |b| {
         b.iter(|| {
             let hash = make_hash(&env, (epoch % 255) as u8);
-            client.submit_snapshot(black_box(&epoch), black_box(&hash), black_box(&admin));
+            client
+                .submit_snapshot(black_box(&epoch), black_box(&hash), black_box(&admin))
+                .unwrap();
             epoch += 1;
         })
     });
@@ -60,7 +63,7 @@ fn bench_get_snapshot(c: &mut Criterion) {
 
     for epoch in 1u64..=100 {
         let hash = make_hash(&env, (epoch % 255) as u8);
-        client.submit_snapshot(&epoch, &hash, &admin);
+        client.submit_snapshot(&epoch, &hash, &admin).unwrap();
     }
 
     c.bench_function("analytics::get_snapshot", |b| {
@@ -79,7 +82,7 @@ fn bench_get_latest_snapshot(c: &mut Criterion) {
 
     for epoch in 1u64..=50 {
         let hash = make_hash(&env, (epoch % 255) as u8);
-        client.submit_snapshot(&epoch, &hash, &admin);
+        client.submit_snapshot(&epoch, &hash, &admin).unwrap();
     }
 
     c.bench_function("analytics::get_latest_snapshot", |b| {
@@ -91,6 +94,7 @@ fn bench_get_latest_snapshot(c: &mut Criterion) {
 // bench_batch_operations
 // Measures cost of submitting N snapshots in sequence.
 // Parameterised over batch sizes: 5, 10, 25, 50.
+// A fresh Env is created per iteration to keep epochs valid.
 // ============================================================================
 
 fn bench_batch_operations(c: &mut Criterion) {
@@ -106,11 +110,9 @@ fn bench_batch_operations(c: &mut Criterion) {
                     let (client, admin) = setup_analytics(&env);
                     for epoch in 1..=size {
                         let hash = make_hash(&env, (epoch % 255) as u8);
-                        client.submit_snapshot(
-                            black_box(&epoch),
-                            black_box(&hash),
-                            black_box(&admin),
-                        );
+                        client
+                            .submit_snapshot(black_box(&epoch), black_box(&hash), black_box(&admin))
+                            .unwrap();
                     }
                 })
             },
@@ -134,7 +136,7 @@ fn bench_snapshot_history_growth(c: &mut Criterion) {
             let (client, admin) = setup_analytics(&env);
             for epoch in 1..=n {
                 let hash = make_hash(&env, (epoch % 255) as u8);
-                client.submit_snapshot(&epoch, &hash, &admin);
+                client.submit_snapshot(&epoch, &hash, &admin).unwrap();
             }
             b.iter(|| client.get_snapshot_history())
         });
@@ -146,6 +148,7 @@ fn bench_snapshot_history_growth(c: &mut Criterion) {
 // ============================================================================
 // bench_stellar_insights_submit
 // Submit benchmark against the stellar_insights contract variant.
+// Result is unwrapped — a panic here indicates a contract regression.
 // ============================================================================
 
 fn bench_stellar_insights_submit(c: &mut Criterion) {
@@ -156,7 +159,9 @@ fn bench_stellar_insights_submit(c: &mut Criterion) {
     c.bench_function("stellar_insights::submit_snapshot", |b| {
         b.iter(|| {
             let hash = make_hash(&env, (epoch % 255) as u8);
-            client.submit_snapshot(black_box(&epoch), black_box(&hash), black_box(&admin));
+            client
+                .submit_snapshot(black_box(&epoch), black_box(&hash), black_box(&admin))
+                .unwrap();
             epoch += 1;
         })
     });
@@ -173,11 +178,11 @@ fn bench_stellar_insights_get(c: &mut Criterion) {
 
     for epoch in 1u64..=100 {
         let hash = make_hash(&env, (epoch % 255) as u8);
-        client.submit_snapshot(&epoch, &hash, &admin);
+        client.submit_snapshot(&epoch, &hash, &admin).unwrap();
     }
 
     c.bench_function("stellar_insights::get_snapshot", |b| {
-        b.iter(|| client.get_snapshot(black_box(&50u64)))
+        b.iter(|| client.get_snapshot(black_box(&50u64)).unwrap())
     });
 }
 
@@ -192,11 +197,11 @@ fn bench_stellar_insights_latest(c: &mut Criterion) {
 
     for epoch in 1u64..=50 {
         let hash = make_hash(&env, (epoch % 255) as u8);
-        client.submit_snapshot(&epoch, &hash, &admin);
+        client.submit_snapshot(&epoch, &hash, &admin).unwrap();
     }
 
     c.bench_function("stellar_insights::latest_snapshot", |b| {
-        b.iter(|| client.latest_snapshot())
+        b.iter(|| client.latest_snapshot().unwrap())
     });
 }
 
