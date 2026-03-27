@@ -1228,7 +1228,7 @@ fn test_pagination() {
 }
 
 #[test]
-fn test_pagination_cursor_non_sequential() {
+fn test_pagination_cursor() {
     let env = Env::default();
     env.mock_all_auths();
 

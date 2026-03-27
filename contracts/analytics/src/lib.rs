@@ -800,7 +800,7 @@ impl AnalyticsContract {
 
         Ok(PaginatedSnapshots {
             snapshots: results,
-            total_count: latest_epoch,
+            total_count: u64::from(snapshots.len()),
             has_more: next_cursor.is_some(),
             next_cursor,
         })
