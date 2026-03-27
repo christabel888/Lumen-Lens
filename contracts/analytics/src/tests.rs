@@ -1198,3 +1198,77 @@ fn test_submit_snapshot_with_ttl_stores_metadata() {
     assert_eq!(snapshot.expires_at, Some(6000u64));
     assert_eq!(snapshot.hash, hash);
 }
+
+// ============================================================================
+// Multi-Sig Tests
+// ============================================================================
+
+#[test]
+fn test_multisig_initialization() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let admin1 = Address::generate(&env);
+    let admin2 = Address::generate(&env);
+    let admins = vec![&env, admin1.clone(), admin2.clone()];
+    let threshold = 2;
+
+    client.initialize_multisig(&admins, &threshold);
+
+    let config = client.get_multisig_config().unwrap();
+    assert_eq!(config.admins.len(), 2);
+    assert_eq!(config.threshold, 2);
+    assert!(config.admins.contains(&admin1));
+    assert!(config.admins.contains(&admin2));
+}
+
+#[test]
+fn test_multisig_proposal() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let admin1 = Address::generate(&env);
+    let admin2 = Address::generate(&env);
+    let admins = vec![&env, admin1.clone(), admin2.clone()];
+    client.initialize_multisig(&admins, &2);
+
+    let action_type = soroban_sdk::String::from_str(&env, "upgrade");
+    let action_data = BytesN::from_array(&env, &[0u8; 32]);
+    let action_id = client.propose_action(&admin1, &action_type, &action_data);
+
+    let pending = client.get_pending_action(&action_id).unwrap();
+    assert_eq!(pending.action_id, action_id);
+    assert_eq!(pending.signatures.len(), 1);
+    assert_eq!(pending.signatures.get(0).unwrap(), admin1);
+}
+
+#[test]
+fn test_multisig_threshold() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let admin1 = Address::generate(&env);
+    let admin2 = Address::generate(&env);
+    let admins = vec![&env, admin1.clone(), admin2.clone()];
+    client.initialize_multisig(&admins, &2);
+
+    let action_type = soroban_sdk::String::from_str(&env, "test");
+    let action_data = BytesN::from_array(&env, &[0u8; 32]);
+    let action_id = client.propose_action(&admin1, &action_type, &action_data);
+
+    // First signature already added by proposer
+    let reached_first = client.sign_action(&admin1, &action_id);
+    assert!(!reached_first); // Already signed, still 1/2
+
+    // Second signature
+    let reached_second = client.sign_action(&admin2, &action_id);
+    assert!(reached_second); // Now 2/2
+
+    let pending = client.get_pending_action(&action_id).unwrap();
+    assert_eq!(pending.signatures.len(), 2);
+}
