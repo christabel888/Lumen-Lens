@@ -120,6 +120,7 @@ pub enum DataKey {
     Admin,
     Stopped,
     Paused,
+    ReentrancyGuard,
     MultiSigConfig,
     PendingAction(u64),
     NextActionId,
@@ -143,6 +144,30 @@ impl SnapshotContract {
         Ok(())
     }
 
+    /// Internal: check and set reentrancy guard
+    fn check_and_set_reentrancy_guard(env: &Env) -> Result<(), &'static str> {
+        let is_locked: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::ReentrancyGuard)
+            .unwrap_or(false);
+
+        if is_locked {
+            return Err("Reentrancy detected: function already in execution");
+        }
+
+        env.storage().instance().set(&DataKey::ReentrancyGuard, &true);
+        Ok(())
+    }
+
+    /// Internal: clear reentrancy guard
+    fn clear_reentrancy_guard(env: &Env) {
+        env.storage().instance().set(&DataKey::ReentrancyGuard, &false);
+    }
+
+    /// Admin-only: stop contract operations
+    pub fn stop_contract(env: Env) {
+        let admin: Address = env
     fn get_next_action_id(env: &Env) -> u64 {
         let id: u64 = env
             .storage()
@@ -310,6 +335,28 @@ impl SnapshotContract {
     }
 
     /// Submit a snapshot hash for an epoch with input validation
+    ///
+    /// # Arguments
+    /// * `hash` - 32-byte SHA-256 hash of analytics snapshot
+    /// * `epoch` - Epoch identifier (must be positive)
+    ///
+    /// # Panics
+    /// * If contract is paused for emergency maintenance
+    /// * If hash is not exactly 32 bytes
+    /// * If epoch is 0
+    /// * If a snapshot already exists for this epoch
+    /// * If epoch <= latest (monotonicity violated: out-of-order or duplicate)
+    /// * If reentrancy is detected
+    ///
+    /// # Returns
+    /// * Ledger timestamp when snapshot was recorded
+    pub fn submit_snapshot(env: Env, hash: Bytes, epoch: u64) -> u64 {
+        // Check reentrancy guard
+        if let Err(e) = Self::check_and_set_reentrancy_guard(&env) {
+            panic!("{}", e);
+        }
+
+        // Check if contract is paused
     pub fn submit_snapshot(env: Env, hash: Bytes, epoch: u64) -> Result<u64, Error> {
         let is_paused: bool = env
             .storage()
@@ -317,6 +364,23 @@ impl SnapshotContract {
             .get(&DataKey::Paused)
             .unwrap_or(false);
         if is_paused {
+            Self::clear_reentrancy_guard(&env);
+            panic!("Contract is paused for emergency maintenance");
+        }
+
+        // Validate inputs
+        if hash.len() != HASH_SIZE {
+            Self::clear_reentrancy_guard(&env);
+            panic!(
+                "Invalid hash size: expected {} bytes, got {}",
+                HASH_SIZE,
+                hash.len()
+            );
+        }
+
+        if epoch == 0 {
+            Self::clear_reentrancy_guard(&env);
+            panic!("Invalid epoch: must be greater than 0");
             return Err(Error::ContractPaused);
         }
 
@@ -331,6 +395,7 @@ impl SnapshotContract {
         let current_latest: Option<u64> = env.storage().persistent().get(&DataKey::LatestEpoch);
         if let Some(latest) = current_latest {
             if epoch <= latest {
+                Self::clear_reentrancy_guard(&env);
                 if epoch == latest {
                     return Err(Error::EpochAlreadyExists);
                 } else {
@@ -355,6 +420,8 @@ impl SnapshotContract {
             .unwrap_or_else(|| Map::new(&env));
 
         if snapshots.contains_key(epoch) {
+            Self::clear_reentrancy_guard(&env);
+            panic!("Snapshot for epoch {} already exists", epoch);
             return Err(Error::EpochAlreadyExists);
         }
 
@@ -377,6 +444,10 @@ impl SnapshotContract {
             },
         );
 
+        // Clear guard before returning
+        Self::clear_reentrancy_guard(&env);
+
+        timestamp
         Ok(timestamp)
     }
 
@@ -1084,6 +1155,26 @@ mod test {
     }
 
     #[test]
+    #[should_panic(expected = "Reentrancy detected")]
+    fn test_reentrancy_protection() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let client =
+            SnapshotContractClient::new(&env, &env.register_contract(None, SnapshotContract));
+
+        let hash = bytes!(
+            &env,
+            0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
+        );
+
+        // Manually set the reentrancy guard to simulate a reentrant call
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyGuard, &true);
+
+        // This should panic due to reentrancy detection
+        client.submit_snapshot(&hash, &1);
     fn test_multisig_initialization() {
         let env = Env::default();
         let contract_id = env.register_contract(None, SnapshotContract);

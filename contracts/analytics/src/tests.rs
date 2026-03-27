@@ -17,6 +17,100 @@ fn create_test_hash(env: &Env, value: u8) -> BytesN<32> {
 // ============================================================================
 
 #[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_functions_require_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call get_snapshot before initialization should panic
+    client.get_snapshot(&1u64);
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_get_latest_snapshot_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call get_latest_snapshot before initialization should panic
+    client.get_latest_snapshot();
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_get_snapshot_history_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call get_snapshot_history before initialization should panic
+    client.get_snapshot_history();
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_get_latest_epoch_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call get_latest_epoch before initialization should panic
+    client.get_latest_epoch();
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_get_all_epochs_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call get_all_epochs before initialization should panic
+    client.get_all_epochs();
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_is_snapshot_expired_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    // Attempting to call is_snapshot_expired before initialization should panic
+    client.is_snapshot_expired(&1u64);
+}
+
+#[test]
+#[should_panic(expected = "Contract not initialized")]
+fn test_batch_get_snapshots_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+
+    let mut epochs = Vec::new(&env);
+    epochs.push_back(1u64);
+
+    // Attempting to call batch_get_snapshots before initialization should panic
+    client.batch_get_snapshots(&epochs);
+}
+
+#[test]
 fn test_initialization() {
     let env = Env::default();
     env.mock_all_auths();
