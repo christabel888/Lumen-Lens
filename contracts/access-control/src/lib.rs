@@ -1,6 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, contracterror, symbol_short, Address, Env, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
+    Symbol, Vec,
 };
 
 pub const VERSION: &str = "0.1.0";
@@ -168,7 +169,12 @@ impl AccessControlContract {
         false
     }
 
-    pub fn grant_permission(env: Env, caller: Address, role: Role, function: Symbol) -> Result<(), Error> {
+    pub fn grant_permission(
+        env: Env,
+        caller: Address,
+        role: Role,
+        function: Symbol,
+    ) -> Result<(), Error> {
         caller.require_auth();
         Self::require_role(&env, &caller, Role::Admin)?;
 
