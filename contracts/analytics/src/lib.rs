@@ -65,8 +65,6 @@ const LEDGER_SECONDS: u64 = 5; // ~5 seconds per ledger
 
 const RATE_LIMIT_WINDOW: u64 = 3600; // 1 hour
 const MAX_CALLS_PER_WINDOW: u32 = 100;
-    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String, Vec,
-};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -127,6 +125,16 @@ pub struct PauseEvent {
 pub struct UnpauseEvent {
     pub unpaused_by: Address,
     pub reason: String,
+    pub timestamp: u64,
+    pub ledger_sequence: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminTransferEvent {
+    pub previous_admin: Address,
+    pub new_admin: Address,
+    pub transferred_by: Address,
     pub timestamp: u64,
     pub ledger_sequence: u32,
 }
@@ -753,7 +761,22 @@ impl AnalyticsContract {
                 Error::Unauthorized.log_context(&env, "set_admin: caller is not the current admin")
             );
         }
+        
+        let previous_admin = admin;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+        
+        // ✅ EMIT DETAILED EVENT for audit trail
+        env.events().publish(
+            (symbol_short!("admin"), new_admin.clone()),
+            AdminTransferEvent {
+                previous_admin: previous_admin.clone(),
+                new_admin: new_admin.clone(),
+                transferred_by: current_admin,
+                timestamp: env.ledger().timestamp(),
+                ledger_sequence: env.ledger().sequence(),
+            },
+        );
+        
         Ok(())
     }
 
