@@ -76,11 +76,26 @@ impl SnapshotComparison {
             .persistent()
             .set(&DataKey::Snapshots, &snapshots);
 
+        const LEDGERS_TO_EXTEND: u32 = 518_400;
+        env.storage().persistent().extend_ttl(
+            &DataKey::Snapshots,
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
+
         Ok(())
     }
 
     /// Get a specific snapshot by epoch
     pub fn get_snapshot(env: Env, epoch: u64) -> SorobanResult<SnapshotMetadata> {
+        const LEDGERS_TO_EXTEND: u32 = 518_400;
+        if env.storage().persistent().has(&DataKey::Snapshots) {
+            env.storage().persistent().extend_ttl(
+                &DataKey::Snapshots,
+                LEDGERS_TO_EXTEND,
+                LEDGERS_TO_EXTEND,
+            );
+        }
         let snapshots: Map<u64, SnapshotMetadata> = env
             .storage()
             .persistent()

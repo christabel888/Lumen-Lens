@@ -297,6 +297,8 @@ fn validate_epoch(env: &Env, epoch: u64) -> Result<u64, Error> {
 }
 
 /// Write one snapshot to per-epoch persistent storage and update the shared map + latest epoch.
+const LEDGERS_TO_EXTEND: u32 = 518_400; // ~30 days at 5s per ledger
+
 fn write_snapshot(
     env: &Env,
     epoch: u64,
@@ -306,10 +308,20 @@ fn write_snapshot(
     env.storage()
         .persistent()
         .set(&DataKey::Snapshot(epoch), metadata);
+    env.storage().persistent().extend_ttl(
+        &DataKey::Snapshot(epoch),
+        LEDGERS_TO_EXTEND,
+        LEDGERS_TO_EXTEND,
+    );
     snapshots.set(epoch, metadata.clone());
     env.storage()
         .persistent()
         .set(&DataKey::Snapshots, snapshots);
+    env.storage().persistent().extend_ttl(
+        &DataKey::Snapshots,
+        LEDGERS_TO_EXTEND,
+        LEDGERS_TO_EXTEND,
+    );
     env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
 }
 
@@ -626,6 +638,13 @@ impl AnalyticsContract {
     /// Get snapshot metadata for a specific epoch.
     pub fn get_snapshot(env: Env, epoch: u64) -> Result<Option<SnapshotMetadata>, Error> {
         require_initialized(&env)?;
+        if env.storage().persistent().has(&DataKey::Snapshot(epoch)) {
+            env.storage().persistent().extend_ttl(
+                &DataKey::Snapshot(epoch),
+                LEDGERS_TO_EXTEND,
+                LEDGERS_TO_EXTEND,
+            );
+        }
         Ok(env.storage().persistent().get(&DataKey::Snapshot(epoch)))
     }
 

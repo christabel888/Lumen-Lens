@@ -196,6 +196,14 @@ impl StellarInsightsContract {
             .persistent()
             .set(&DataKey::Snapshots, &snapshots);
 
+        // Extend storage TTL (~30 days at 5s per ledger)
+        const LEDGERS_TO_EXTEND: u32 = 518_400;
+        env.storage().persistent().extend_ttl(
+            &DataKey::Snapshots,
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
+
         env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
 
         // Emit structured event for off-chain indexing
@@ -221,6 +229,15 @@ impl StellarInsightsContract {
     /// # Returns
     /// * The 32-byte hash stored for that epoch
     pub fn get_snapshot(env: Env, epoch: u64) -> Result<BytesN<32>, Error> {
+        // Extend TTL on read to keep data alive
+        const LEDGERS_TO_EXTEND: u32 = 518_400;
+        if env.storage().persistent().has(&DataKey::Snapshots) {
+            env.storage().persistent().extend_ttl(
+                &DataKey::Snapshots,
+                LEDGERS_TO_EXTEND,
+                LEDGERS_TO_EXTEND,
+            );
+        }
         let snapshots: Map<u64, Snapshot> = env
             .storage()
             .persistent()

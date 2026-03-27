@@ -433,6 +433,19 @@ impl SnapshotContract {
             .persistent()
             .set(&DataKey::LatestEpoch, &epoch);
 
+        // Extend storage TTL (~30 days at 5s per ledger)
+        const LEDGERS_TO_EXTEND: u32 = 518_400;
+        env.storage().persistent().extend_ttl(
+            &DataKey::Snapshots,
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
+        env.storage().persistent().extend_ttl(
+            &DataKey::LatestEpoch,
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
+
         env.events().publish(
             (symbol_short!("SNAP_SUB"),),
             SnapshotSubmittedEvent {
@@ -454,6 +467,14 @@ impl SnapshotContract {
     /// Get snapshot hash for a specific epoch
     pub fn get_snapshot(env: Env, epoch: u64) -> Result<Bytes, Error> {
         Self::require_not_stopped(&env)?;
+        const LEDGERS_TO_EXTEND: u32 = 518_400;
+        if env.storage().persistent().has(&DataKey::Snapshots) {
+            env.storage().persistent().extend_ttl(
+                &DataKey::Snapshots,
+                LEDGERS_TO_EXTEND,
+                LEDGERS_TO_EXTEND,
+            );
+        }
         let snapshots: Map<u64, Snapshot> = env
             .storage()
             .persistent()
