@@ -1198,3 +1198,76 @@ fn test_submit_snapshot_with_ttl_stores_metadata() {
     assert_eq!(snapshot.expires_at, Some(6000u64));
     assert_eq!(snapshot.hash, hash);
 }
+
+#[test]
+fn test_pause_with_reason() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(12345);
+
+    let reason = soroban_sdk::String::from_str(&env, "Emergency maintenance - fixing critical bug");
+    client.pause(&admin, &reason);
+
+    assert!(client.is_paused());
+
+    let info = client
+        .get_pause_info()
+        .expect("pause info must be set after pause");
+    assert!(info.paused);
+    assert_eq!(info.reason, reason);
+    assert_eq!(info.paused_at, 12345);
+    assert_eq!(info.paused_by, admin);
+}
+
+#[test]
+fn test_get_pause_info_after_unpause() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(1000);
+
+    client.pause(
+        &admin,
+        &soroban_sdk::String::from_str(&env, "scheduled downtime"),
+    );
+
+    env.ledger().set_timestamp(2000);
+    let unpause_reason = soroban_sdk::String::from_str(&env, "maintenance complete");
+    client.unpause(&admin, &unpause_reason);
+
+    assert!(!client.is_paused());
+
+    let info = client
+        .get_pause_info()
+        .expect("pause info must be set after unpause");
+    assert!(!info.paused);
+    assert_eq!(info.reason, unpause_reason);
+    assert_eq!(info.paused_at, 2000);
+    assert_eq!(info.paused_by, admin);
+}
+
+#[test]
+fn test_get_pause_info_none_when_never_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    // Contract has never been paused — info should be None
+    assert!(client.get_pause_info().is_none());
+}
