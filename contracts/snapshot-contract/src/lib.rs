@@ -157,13 +157,17 @@ impl SnapshotContract {
             return Err("Reentrancy detected: function already in execution");
         }
 
-        env.storage().instance().set(&DataKey::ReentrancyGuard, &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyGuard, &true);
         Ok(())
     }
 
     /// Internal: clear reentrancy guard
     fn clear_reentrancy_guard(env: &Env) {
-        env.storage().instance().set(&DataKey::ReentrancyGuard, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::ReentrancyGuard, &false);
     }
 
     fn get_next_action_id(env: &Env) -> u64 {
@@ -172,7 +176,9 @@ impl SnapshotContract {
             .instance()
             .get(&DataKey::NextActionId)
             .unwrap_or(0);
-        env.storage().instance().set(&DataKey::NextActionId, &(id + 1));
+        env.storage()
+            .instance()
+            .set(&DataKey::NextActionId, &(id + 1));
         id
     }
 
@@ -612,7 +618,11 @@ impl SnapshotContract {
         }
     }
 
-    pub fn initialize_multisig(env: Env, admins: Vec<Address>, threshold: u32) -> Result<(), Error> {
+    pub fn initialize_multisig(
+        env: Env,
+        admins: Vec<Address>,
+        threshold: u32,
+    ) -> Result<(), Error> {
         if threshold == 0 || threshold > admins.len() as u32 {
             return Err(Error::InvalidThreshold);
         }
@@ -714,9 +724,9 @@ impl SnapshotContract {
 mod test {
     use super::*;
     use soroban_sdk::{
-        bytes, vec,
+        bytes,
         testutils::{Address as _, Events},
-        Env, TryIntoVal,
+        vec, Env, TryIntoVal,
     };
 
     #[test]

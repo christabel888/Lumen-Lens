@@ -428,7 +428,6 @@ fn test_submit_snapshot_valid_after_edge_cases() {
     assert_eq!(snapshot.submitter, admin);
 }
 
-
 // ============================================================================
 // Access Control Tests
 // ============================================================================
