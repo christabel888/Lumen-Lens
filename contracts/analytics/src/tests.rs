@@ -348,6 +348,99 @@ fn test_bounded_storage_growth_simulation() {
 
 
 // ============================================================================
+// Input Validation Security Tests
+// ============================================================================
+
+#[test]
+fn test_submit_snapshot_with_zero_hash() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    // Attempt to submit with a zero hash (all bytes are 0x00)
+    let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
+    let result = client.try_submit_snapshot(&1u64, &zero_hash, &admin);
+
+    // Should fail with InvalidHashZero error
+    assert_eq!(result, Err(Ok(Error::InvalidHashZero)));
+}
+
+#[test]
+fn test_submit_snapshot_epoch_zero_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    // Attempt to submit with epoch 0
+    // Note: valid non-zero hash should be used; validation should catch epoch=0 first
+    let valid_hash = create_test_hash(&env, 42);
+    let result = client.try_submit_snapshot(&0u64, &valid_hash, &admin);
+
+    // Should fail with InvalidEpochZero error
+    assert_eq!(result, Err(Ok(Error::InvalidEpochZero)));
+}
+
+#[test]
+fn test_submit_snapshot_unauthorized_caller_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let unauthorized_user = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    // Attempt to submit with unauthorized caller
+    let valid_hash = create_test_hash(&env, 42);
+    let result = client.try_submit_snapshot(&1u64, &valid_hash, &unauthorized_user);
+
+    // Should fail with Unauthorized error
+    assert_eq!(result, Err(Ok(Error::Unauthorized)));
+}
+
+#[test]
+fn test_submit_snapshot_valid_after_edge_cases() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    env.ledger().set_timestamp(5000);
+
+    // After testing edge cases, verify a valid submission still works
+    let valid_hash = create_test_hash(&env, 99);
+    let result = client.try_submit_snapshot(&1u64, &valid_hash, &admin);
+
+    // Should succeed
+    assert!(result.is_ok());
+    let timestamp = result.unwrap();
+    assert_eq!(timestamp, 5000);
+
+    // Verify snapshot was stored correctly
+    let snapshot = client.get_snapshot(&1u64).unwrap();
+    assert_eq!(snapshot.epoch, 1u64);
+    assert_eq!(snapshot.hash, valid_hash);
+    assert_eq!(snapshot.timestamp, 5000);
+    assert_eq!(snapshot.submitter, admin);
+}
+
+
+// ============================================================================
 // Access Control Tests
 // ============================================================================
 
