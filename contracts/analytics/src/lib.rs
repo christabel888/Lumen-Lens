@@ -81,7 +81,6 @@ pub struct TimelockAction {
     pub executed: bool,
 }
 
-const TIMELOCK_DELAY: u64 = 172_800; // 48 hours in seconds
 
 /// Multi-sig configuration: list of co-admins and the signing threshold.
 #[contracttype]
@@ -112,6 +111,46 @@ pub struct PaginatedSnapshots {
     pub next_cursor: Option<u64>,
 }
 
+// ── Configuration ────────────────────────────────────────────────────────────
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractConfig {
+    pub rate_limit_window: u64,
+    pub max_calls_per_window: u32,
+    pub timelock_delay: u64,
+    pub max_batch_size: u32,
+}
+
+impl ContractConfig {
+    pub fn default_config() -> Self {
+        Self {
+            rate_limit_window: 3_600,
+            max_calls_per_window: 100,
+            timelock_delay: 172_800,
+            max_batch_size: 50,
+        }
+    }
+}
+
+// ── Compact snapshot types ────────────────────────────────────────────────────
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompactSnapshot {
+    pub epoch: u64,
+    pub hash: BytesN<32>,
+    pub timestamp: u32,
+    pub submitter_id: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AddressRegistry {
+    pub addresses: Map<u32, Address>,
+    pub next_id: u32,
+}
+
 // ── Storage keys ──────────────────────────────────────────────────────────────
 
 #[contracttype]
@@ -128,19 +167,55 @@ pub enum DataKey {
     Version,
     MultiSigConfig,
     PendingAction(u64),
+    Config,
+    CompactSnapshot(u64),
+    AddressRegistry,
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_SNAPSHOT_TTL: u64 = 7_776_000; // 90 days in seconds
 const LEDGER_SECONDS: u64 = 5; // ~5 seconds per ledger
-const RATE_LIMIT_WINDOW: u64 = 3_600; // 1 hour
-const MAX_CALLS_PER_WINDOW: u32 = 100;
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
+fn get_config(env: &Env) -> ContractConfig {
+    env.storage()
+        .instance()
+        .get(&DataKey::Config)
+        .unwrap_or_else(ContractConfig::default_config)
+}
+
+fn get_or_create_address_id(env: &Env, address: &Address) -> u32 {
+    let mut registry: AddressRegistry = env
+        .storage()
+        .persistent()
+        .get(&DataKey::AddressRegistry)
+        .unwrap_or(AddressRegistry {
+            addresses: Map::new(env),
+            next_id: 1,
+        });
+
+    for i in 1..registry.next_id {
+        if let Some(addr) = registry.addresses.get(i) {
+            if addr == *address {
+                return i;
+            }
+        }
+    }
+
+    let id = registry.next_id;
+    registry.addresses.set(id, address.clone());
+    registry.next_id += 1;
+    env.storage()
+        .persistent()
+        .set(&DataKey::AddressRegistry, &registry);
+    id
+}
+
 fn check_rate_limit(env: &Env, caller: &Address) -> Result<(), Error> {
     let now = env.ledger().timestamp();
+    let config = get_config(env);
 
     let mut rate_info: RateLimitInfo = env
         .storage()
@@ -152,12 +227,12 @@ fn check_rate_limit(env: &Env, caller: &Address) -> Result<(), Error> {
             window_start: now,
         });
 
-    if now - rate_info.window_start > RATE_LIMIT_WINDOW {
+    if now - rate_info.window_start > config.rate_limit_window {
         rate_info.call_count = 0;
         rate_info.window_start = now;
     }
 
-    if rate_info.call_count >= MAX_CALLS_PER_WINDOW {
+    if rate_info.call_count >= config.max_calls_per_window {
         return Err(Error::RateLimitExceeded
             .log_context(env, "check_rate_limit: too many calls in this window"));
     }
@@ -254,8 +329,8 @@ pub struct AnalyticsContract;
 
 #[contractimpl]
 impl AnalyticsContract {
-    /// Initialize the contract with an admin address.
-    pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+    /// Initialize the contract with an admin address and optional configuration.
+    pub fn initialize(env: Env, admin: Address, config: Option<ContractConfig>) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized
                 .log_context(&env, "initialize: contract already initialized"));
@@ -265,11 +340,28 @@ impl AnalyticsContract {
         storage.set(&DataKey::LatestEpoch, &0u64);
         storage.set(&DataKey::Paused, &false);
         storage.set(&DataKey::Version, &VERSION);
+        storage.set(&DataKey::Config, &config.unwrap_or_else(ContractConfig::default_config));
         env.storage().persistent().set(
             &DataKey::Snapshots,
             &Map::<u64, SnapshotMetadata>::new(&env),
         );
         Ok(())
+    }
+
+    /// Update contract configuration. Admin-only.
+    pub fn update_config(env: Env, admin: Address, config: ContractConfig) -> Result<(), Error> {
+        admin.require_auth();
+        let stored_admin = require_admin(&env)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized.log_context(&env, "update_config: caller is not the admin"));
+        }
+        env.storage().instance().set(&DataKey::Config, &config);
+        Ok(())
+    }
+
+    /// Get current contract configuration.
+    pub fn get_config(env: Env) -> ContractConfig {
+        get_config(&env)
     }
 
     /// Submit a single snapshot. Returns the ledger timestamp on success.
@@ -818,12 +910,13 @@ impl AnalyticsContract {
             .unwrap_or(0u64);
 
         let now = env.ledger().timestamp();
+        let timelock_delay = get_config(&env).timelock_delay;
         let action = TimelockAction {
             action_type: String::from_str(&env, "set_admin"),
             new_admin: new_admin.clone(),
             proposer: proposer.clone(),
             proposed_at: now,
-            executable_at: now + TIMELOCK_DELAY,
+            executable_at: now + timelock_delay,
             executed: false,
         };
 
@@ -1104,6 +1197,66 @@ impl AnalyticsContract {
         env.storage()
             .persistent()
             .get(&DataKey::PendingAction(action_id))
+    }
+
+    /// Submit a compact snapshot using address registry for storage efficiency.
+    pub fn submit_snapshot_compact(
+        env: Env,
+        epoch: u64,
+        hash: BytesN<32>,
+        caller: Address,
+    ) -> Result<u64, Error> {
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if is_paused {
+            return Err(Error::ContractPaused
+                .log_context(&env, "submit_snapshot_compact: contract is paused"));
+        }
+
+        caller.require_auth();
+        check_rate_limit(&env, &caller)?;
+
+        let admin = require_admin(&env)?;
+        if caller != admin {
+            return Err(Error::Unauthorized
+                .log_context(&env, "submit_snapshot_compact: caller is not the admin"));
+        }
+
+        validate_epoch(&env, epoch)?;
+
+        let submitter_id = get_or_create_address_id(&env, &caller);
+        let timestamp = env.ledger().timestamp();
+
+        let compact = CompactSnapshot {
+            epoch,
+            hash,
+            timestamp: timestamp as u32,
+            submitter_id,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::CompactSnapshot(epoch), &compact);
+        env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
+
+        Ok(timestamp)
+    }
+
+    /// Get a compact snapshot by epoch.
+    pub fn get_compact_snapshot(env: Env, epoch: u64) -> Option<CompactSnapshot> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::CompactSnapshot(epoch))
+    }
+
+    /// Get the address registry.
+    pub fn get_address_registry(env: Env) -> Option<AddressRegistry> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AddressRegistry)
     }
 
     // =========================================================================
