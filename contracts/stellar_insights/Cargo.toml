@@ -8,6 +8,9 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 doctest = false
 
+[features]
+testutils = ["soroban-sdk/testutils"]
+
 [lints.clippy]
 unwrap_used = "deny"
 expect_used = "deny"
