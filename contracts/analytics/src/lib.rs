@@ -925,6 +925,40 @@ impl AnalyticsContract {
         Ok(())
     }
 
+    /// Upgrade the contract Wasm. Admin-only.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        // Only admin can upgrade
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::AdminNotSet)?;
+
+        admin.require_auth();
+
+        // Verify contract is not paused
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+
+        if paused {
+            return Err(Error::ContractPaused);
+        }
+
+        // Perform upgrade
+        env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+
+        // Emit event
+        env.events().publish(
+            (symbol_short!("upgrade"),),
+            (admin, new_wasm_hash),
+        );
+
+        Ok(())
+    }
+
     pub fn set_governance(env: Env, caller: Address, governance: Address) -> Result<(), Error> {
         caller.require_auth();
         let admin = require_admin(&env)?;
