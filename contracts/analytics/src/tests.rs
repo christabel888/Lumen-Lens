@@ -4,7 +4,7 @@
 
 use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Events as _, Ledger},
     vec, Address, BytesN, Env, Vec,
 };
 
@@ -26,7 +26,6 @@ fn test_functions_require_initialization() {
     assert_eq!(result, Err(Ok(Error::NotInitialized)));
 }
 
-
 #[test]
 fn test_get_latest_snapshot_requires_initialization() {
     let env = Env::default();
@@ -36,7 +35,6 @@ fn test_get_latest_snapshot_requires_initialization() {
     let result = client.try_get_latest_snapshot();
     assert_eq!(result, Err(Ok(Error::NotInitialized)));
 }
-
 
 #[test]
 fn test_get_snapshot_history_requires_initialization() {
@@ -48,7 +46,6 @@ fn test_get_snapshot_history_requires_initialization() {
     assert_eq!(result, Err(Ok(Error::NotInitialized)));
 }
 
-
 #[test]
 fn test_get_latest_epoch_requires_initialization() {
     let env = Env::default();
@@ -58,7 +55,6 @@ fn test_get_latest_epoch_requires_initialization() {
     let result = client.try_get_latest_epoch();
     assert_eq!(result, Err(Ok(Error::NotInitialized)));
 }
-
 
 #[test]
 fn test_get_all_epochs_requires_initialization() {
@@ -70,7 +66,6 @@ fn test_get_all_epochs_requires_initialization() {
     assert_eq!(result, Err(Ok(Error::NotInitialized)));
 }
 
-
 #[test]
 fn test_is_snapshot_expired_requires_initialization() {
     let env = Env::default();
@@ -80,7 +75,6 @@ fn test_is_snapshot_expired_requires_initialization() {
     let result = client.try_is_snapshot_expired(&1u64);
     assert_eq!(result, Err(Ok(Error::NotInitialized)));
 }
-
 
 #[test]
 fn test_batch_get_snapshots_requires_initialization() {
@@ -93,7 +87,6 @@ fn test_batch_get_snapshots_requires_initialization() {
     let result = client.try_batch_get_snapshots(&epochs);
     assert_eq!(result, Err(Ok(Error::NotInitialized)));
 }
-
 
 #[test]
 fn test_initialization() {
@@ -109,9 +102,8 @@ fn test_initialization() {
     assert_eq!(client.get_latest_epoch(), 0);
     assert_eq!(client.get_snapshot_history().len(), 0);
     assert_eq!(client.get_latest_snapshot(), None);
-    assert_eq!(client.get_admin(), Some(admin));
+    assert_eq!(client.get_admin(), admin);
 }
-
 
 #[test]
 fn test_initialize_cannot_reinitialize() {
@@ -173,14 +165,13 @@ fn test_submit_single_snapshot() {
     assert_eq!(snapshot.epoch, epoch);
     assert_eq!(snapshot.hash, hash);
     assert_eq!(snapshot.timestamp, timestamp);
-   assert_eq!(client.get_latest_epoch(), epoch);
- 
-   let latest = client.get_latest_snapshot().unwrap(); // Optional<Snapshot>
-     assert_eq!(latest.epoch, epoch);
-     assert_eq!(latest.hash, hash);
-     assert_eq!(latest.timestamp, timestamp);
- }
+    assert_eq!(client.get_latest_epoch(), epoch);
 
+    let latest = client.get_latest_snapshot().unwrap(); // Optional<Snapshot>
+    assert_eq!(latest.epoch, epoch);
+    assert_eq!(latest.hash, hash);
+    assert_eq!(latest.timestamp, timestamp);
+}
 
 #[test]
 fn test_multiple_snapshots_strictly_increasing_epochs() {
@@ -199,13 +190,15 @@ fn test_multiple_snapshots_strictly_increasing_epochs() {
     }
 
     for i in 1u64..=3 {
-       assert_eq!(client.get_snapshot(&i).unwrap().hash, create_test_hash(&env, i as u8));
-     }
-   assert_eq!(client.get_latest_epoch(), 3);
-   assert_eq!(client.get_snapshot_history().len(), 3);
-   assert_eq!(client.get_all_epochs().len(), 3);
- }
-
+        assert_eq!(
+            client.get_snapshot(&i).unwrap().hash,
+            create_test_hash(&env, i as u8)
+        );
+    }
+    assert_eq!(client.get_latest_epoch(), 3);
+    assert_eq!(client.get_snapshot_history().len(), 3);
+    assert_eq!(client.get_all_epochs().len(), 3);
+}
 
 #[test]
 fn test_non_sequential_epochs_monotonic_order() {
@@ -225,14 +218,13 @@ fn test_non_sequential_epochs_monotonic_order() {
     }
 
     for (i, &epoch) in epochs.iter().enumerate() {
-         let snapshot = client.get_snapshot(&epoch).unwrap();
-         assert_eq!(snapshot.epoch, epoch);
-         assert_eq!(snapshot.hash, create_test_hash(&env, (i + 1) as u8));
-     }
-   assert_eq!(client.get_latest_epoch(), 10u64);
-   assert_eq!(client.get_snapshot_history().len(), 3);
- }
-
+        let snapshot = client.get_snapshot(&epoch).unwrap();
+        assert_eq!(snapshot.epoch, epoch);
+        assert_eq!(snapshot.hash, create_test_hash(&env, (i + 1) as u8));
+    }
+    assert_eq!(client.get_latest_epoch(), 10u64);
+    assert_eq!(client.get_snapshot_history().len(), 3);
+}
 
 #[test]
 fn test_historical_data_integrity_after_new_submissions() {
@@ -257,12 +249,11 @@ fn test_historical_data_integrity_after_new_submissions() {
     client.submit_snapshot(&5u64, &create_test_hash(&env, 5), &admin);
 
     assert_eq!(client.get_snapshot(&1u64).unwrap(), snap1_before);
-     assert_eq!(client.get_snapshot(&2u64).unwrap(), snap2_before);
-     assert_eq!(client.get_snapshot(&1u64).unwrap().timestamp, ts1);
-     assert_eq!(client.get_snapshot(&2u64).unwrap().timestamp, ts2);
-   assert_eq!(client.get_latest_epoch(), 5u64);
- }
-
+    assert_eq!(client.get_snapshot(&2u64).unwrap(), snap2_before);
+    assert_eq!(client.get_snapshot(&1u64).unwrap().timestamp, ts1);
+    assert_eq!(client.get_snapshot(&2u64).unwrap().timestamp, ts2);
+    assert_eq!(client.get_latest_epoch(), 5u64);
+}
 
 #[test]
 fn test_get_nonexistent_snapshot() {
@@ -274,9 +265,8 @@ fn test_get_nonexistent_snapshot() {
     let admin = Address::generate(&env);
 
     client.initialize(&admin);
-   assert_eq!(client.get_snapshot(&999), None);
- }
-
+    assert_eq!(client.get_snapshot(&999), None);
+}
 
 #[test]
 fn test_invalid_epoch_zero() {
@@ -339,13 +329,12 @@ fn test_bounded_storage_growth_simulation() {
     }
 
     for epoch in 1u64..=20 {
-       client.get_snapshot(&epoch);
-     }
-   assert_eq!(client.get_latest_epoch(), 20);
-   assert_eq!(client.get_snapshot_history().len(), 20);
-   assert_eq!(client.get_all_epochs().len(), 20);
- }
-
+        client.get_snapshot(&epoch);
+    }
+    assert_eq!(client.get_latest_epoch(), 20);
+    assert_eq!(client.get_snapshot_history().len(), 20);
+    assert_eq!(client.get_all_epochs().len(), 20);
+}
 
 // ============================================================================
 // Access Control Tests
@@ -379,10 +368,9 @@ fn test_authorized_submission_succeeds() {
     env.ledger().set_timestamp(1000);
 
     let timestamp = client.submit_snapshot(&1u64, &create_test_hash(&env, 1), &admin);
-     assert_eq!(timestamp, 1000);
-   assert_eq!(client.get_latest_epoch(), 1u64);
- }
-
+    assert_eq!(timestamp, 1000);
+    assert_eq!(client.get_latest_epoch(), 1u64);
+}
 
 #[test]
 fn test_get_admin() {
@@ -397,10 +385,9 @@ fn test_get_admin() {
     assert_eq!(result, Err(Ok(Error::NotInitialized)));
 
     let admin = Address::generate(&env);
-     client.initialize(&admin);
-   assert_eq!(client.get_admin(), Some(admin));
- }
-
+    client.initialize(&admin);
+    assert_eq!(client.get_admin(), admin);
+}
 
 #[test]
 fn test_set_admin_by_authorized_admin() {
@@ -413,13 +400,12 @@ fn test_set_admin_by_authorized_admin() {
     let new_admin = Address::generate(&env);
 
     client.initialize(&admin);
-     client.set_admin(&admin, &new_admin);
-   assert_eq!(client.get_admin(), Some(new_admin.clone()));
- 
-     client.submit_snapshot(&1u64, &create_test_hash(&env, 1), &new_admin);
-   assert_eq!(client.get_latest_epoch(), 1u64);
- }
+    client.set_admin(&admin, &new_admin);
+    assert_eq!(client.get_admin(), new_admin.clone());
 
+    client.submit_snapshot(&1u64, &create_test_hash(&env, 1), &new_admin);
+    assert_eq!(client.get_latest_epoch(), 1u64);
+}
 
 #[test]
 fn test_set_admin_by_unauthorized_user_fails() {
@@ -454,22 +440,31 @@ fn test_admin_transfer_event() {
     client.set_admin(&admin1, &admin2);
 
     // Verify new admin is set
-    assert_eq!(client.get_admin(), Ok(Some(admin2.clone())));
+    assert_eq!(client.get_admin(), admin2.clone());
 
     // Verify events were emitted
     let events = env.events().all();
     assert!(!events.is_empty(), "Events should have been published");
 
-    // Check the event topics and data
-    let (topics, event_data) = &events[0];
-    assert_eq!(topics.len(), 2, "Event should have 2 topics");
-    
+    // Check the event topics and data — soroban events are (contract_id, topics, data)
+    let (_contract_id, topics, event_data) = events.first_unchecked();
+    assert_eq!(topics.len(), 2u32, "Event should have 2 topics");
+
     // Verify the event data can be decoded as AdminTransferEvent
-    let event: AdminTransferEvent = event_data.clone().unwrap();
-    assert_eq!(event.previous_admin, admin1, "Previous admin should be admin1");
+    let event: AdminTransferEvent = soroban_sdk::FromVal::from_val(&env, &event_data);
+    assert_eq!(
+        event.previous_admin, admin1,
+        "Previous admin should be admin1"
+    );
     assert_eq!(event.new_admin, admin2, "New admin should be admin2");
-    assert_eq!(event.transferred_by, admin1, "Transferred by should be admin1");
-    assert_eq!(event.timestamp, 1000, "Timestamp should match ledger timestamp");
+    assert_eq!(
+        event.transferred_by, admin1,
+        "Transferred by should be admin1"
+    );
+    assert_eq!(
+        event.timestamp, 1000,
+        "Timestamp should match ledger timestamp"
+    );
 }
 
 #[test]
@@ -526,12 +521,12 @@ fn test_batch_submit_snapshots() {
     snapshots.push_back((3u64, create_test_hash(&env, 3)));
 
     let timestamps = client.batch_submit_snapshots(&admin, &snapshots);
- 
-     assert_eq!(timestamps.len(), 3);
-   assert_eq!(client.get_latest_epoch(), 3);
-     assert_eq!(
-         client.get_snapshot(&1u64).unwrap().hash,
-         create_test_hash(&env, 1)
+
+    assert_eq!(timestamps.len(), 3);
+    assert_eq!(client.get_latest_epoch(), 3);
+    assert_eq!(
+        client.get_snapshot(&1u64).unwrap().hash,
+        create_test_hash(&env, 1)
     );
     assert_eq!(
         client.get_snapshot(&2u64).unwrap().hash,
@@ -558,11 +553,11 @@ fn test_batch_get_snapshots() {
     client.submit_snapshot(&3u64, &create_test_hash(&env, 3), &admin);
 
     let epochs = Vec::from_array(&env, [1u64, 2u64, 99u64]); // non-existent
- 
-   let results = client.batch_get_snapshots(&epochs);
- 
-     assert_eq!(results.len(), 3);
-     assert_eq!(
+
+    let results = client.batch_get_snapshots(&epochs);
+
+    assert_eq!(results.len(), 3);
+    assert_eq!(
         results.get(0).unwrap().unwrap().hash,
         create_test_hash(&env, 1)
     );
@@ -591,17 +586,17 @@ fn test_batch_operations_gas_efficiency() {
     }
 
     let timestamps = client.batch_submit_snapshots(&admin, &snapshots);
-     assert_eq!(timestamps.len(), 10);
-   assert_eq!(client.get_latest_epoch(), 10);
- 
-   let mut epochs = Vec::new(&env);
-   for i in 1u64..=10 {
-       epochs.push_back(i);
-   }
-   let results = client.batch_get_snapshots(&epochs);
-     assert_eq!(results.len(), 10);
-     for i in 0u32..10 {
-         let snapshot = results.get(i).unwrap().unwrap();
+    assert_eq!(timestamps.len(), 10);
+    assert_eq!(client.get_latest_epoch(), 10);
+
+    let mut epochs = Vec::new(&env);
+    for i in 1u64..=10 {
+        epochs.push_back(i);
+    }
+    let results = client.batch_get_snapshots(&epochs);
+    assert_eq!(results.len(), 10);
+    for i in 0u32..10 {
+        let snapshot = results.get(i).unwrap().unwrap();
         assert_eq!(snapshot.epoch, (i + 1) as u64);
         assert_eq!(snapshot.hash, create_test_hash(&env, (i + 1) as u8));
     }
@@ -856,11 +851,11 @@ fn test_timelock_proposal() {
     let action = client.get_timelock_action(&action_id).unwrap();
 
     assert_eq!(action.proposer, admin);
-    assert_eq!(action.action_data, new_admin.to_bytes());
+    assert_eq!(action.action_data, new_admin);
     assert_eq!(action.proposed_at, 1000);
     assert_eq!(action.executable_at, 1000 + 172_800);
     assert!(!action.executed);
-    assert_eq!(client.get_admin(), Some(admin));
+    assert_eq!(client.get_admin(), admin);
 }
 
 #[test]
@@ -900,7 +895,7 @@ fn test_timelock_execution_after_delay() {
     env.ledger().set_timestamp(1000 + 172_800);
     client.execute_timelock_action(&admin, &action_id);
 
-    assert_eq!(client.get_admin(), Some(new_admin));
+    assert_eq!(client.get_admin(), new_admin);
     assert!(client.get_timelock_action(&action_id).unwrap().executed);
 }
 
@@ -921,7 +916,7 @@ fn test_timelock_cancellation() {
     client.cancel_timelock_action(&admin, &action_id);
 
     assert!(client.get_timelock_action(&action_id).is_none());
-    assert_eq!(client.get_admin(), Some(admin));
+    assert_eq!(client.get_admin(), admin);
 }
 
 #[test]
@@ -1320,4 +1315,3 @@ fn test_submit_snapshot_with_ttl_stores_metadata() {
     assert_eq!(snapshot.expires_at, Some(6000u64));
     assert_eq!(snapshot.hash, hash);
 }
-
