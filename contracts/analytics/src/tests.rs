@@ -206,7 +206,7 @@ fn test_invalid_epoch_zero() {
 
     client.initialize(&admin);
     let result = client.try_submit_snapshot(&0u64, &create_test_hash(&env, 1), &admin);
-    assert_eq!(result, Err(Ok(Error::InvalidEpochZero)));
+    assert_eq!(result, Err(Ok(Error::InvalidEpoch)));
 }
 
 #[test]
@@ -965,8 +965,8 @@ fn test_error_codes_are_unique() {
         Error::SignerNotAdmin,
     ];
 
-    // Use a plain std Vec — no soroban runtime needed for this pure logic check.
-    let mut seen: std::vec::Vec<u32> = std::vec::Vec::new();
+    let env = Env::default();
+    let mut seen: Vec<u32> = Vec::new(&env);
     for variant in variants {
         let code = variant.code();
         assert!(
@@ -975,7 +975,7 @@ fn test_error_codes_are_unique() {
             code,
             variant
         );
-        seen.push(code);
+        seen.push_back(code);
     }
 }
 

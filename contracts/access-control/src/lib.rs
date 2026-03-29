@@ -1,4 +1,5 @@
 #![no_std]
+use soroban_sdk::testutils::Events;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
     Symbol, Vec,
@@ -7,13 +8,16 @@ use soroban_sdk::{
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[contracterror]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
     Unauthorized = 1,
+    RoleNotFound = 2,
+    PermissionDenied = 3,
+    InvalidRole = 4,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum Role {
     Admin,
@@ -226,10 +230,19 @@ impl AccessControl {
     }
 
     fn require_role(env: &Env, user: &Address, role: Role) -> Result<(), Error> {
-        if !Self::has_role(env.clone(), user.clone(), role) {
-            return Err(Error::Unauthorized);
+        if let Some(roles) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Vec<Role>>(&DataKey::Roles(user.clone()))
+        {
+            for r in roles.iter() {
+                if Self::roles_equal(&r, &role) {
+                    return Ok(());
+                }
+            }
+            return Err(Error::PermissionDenied);
         }
-        Ok(())
+        Err(Error::RoleNotFound)
     }
 
     fn roles_equal(a: &Role, b: &Role) -> bool {

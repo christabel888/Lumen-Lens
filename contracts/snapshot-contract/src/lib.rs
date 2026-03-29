@@ -665,7 +665,7 @@ mod test {
         let _timestamp = client.submit_snapshot(&hash, &epoch);
 
         let retrieved_hash = client.get_snapshot(&epoch);
-        assert_eq!(retrieved_hash, Ok(hash));
+        assert_eq!(retrieved_hash, hash);
     }
 
     #[test]
@@ -743,7 +743,7 @@ mod test {
         );
 
         client.submit_snapshot(&hash1, &10);
-        let latest = client.latest_snapshot().unwrap();
+        let latest = client.latest_snapshot();
         assert_eq!(latest.epoch, 10);
 
         let result = client.try_submit_snapshot(&hash2, &5);
@@ -772,8 +772,8 @@ mod test {
         let epoch2 = 2u64;
         client.submit_snapshot(&hash2, &epoch2);
 
-        assert_eq!(client.get_snapshot(&epoch1), Ok(hash1));
-        assert_eq!(client.get_snapshot(&epoch2), Ok(hash2));
+        assert_eq!(client.get_snapshot(&epoch1), hash1);
+        assert_eq!(client.get_snapshot(&epoch2), hash2);
     }
 
     #[test]
@@ -806,7 +806,7 @@ mod test {
             &7,
         );
 
-        let snapshot = client.latest_snapshot().unwrap();
+        let snapshot = client.latest_snapshot();
         assert_eq!(snapshot.epoch, 7);
         assert_eq!(
             snapshot.hash,
@@ -900,7 +900,7 @@ mod test {
         );
         client.prepare_upgrade(&wasm_hash);
 
-        assert_eq!(client.get_snapshot(&1), Ok(hash1));
+        assert_eq!(client.get_snapshot(&1), hash1);
         assert!(client.verify_snapshot(&hash1));
     }
 
