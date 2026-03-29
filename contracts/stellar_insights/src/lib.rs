@@ -60,6 +60,14 @@ pub struct PublicMetadata {
     pub license: String,
 }
 
+/// Represents an optional admin address in contract info
+#[contracttype]
+#[derive(Clone, Debug)]
+pub enum MaybeAddress {
+    None,
+    Some(Address),
+}
+
 /// Contract info combining metadata with runtime state
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -67,7 +75,7 @@ pub struct ContractInfo {
     pub metadata: PublicMetadata,
     pub initialized: bool,
     pub paused: bool,
-    pub admin: Option<Address>,
+    pub admin: MaybeAddress,
     pub total_snapshots: u64,
 }
 
@@ -427,15 +435,25 @@ impl StellarInsightsContract {
 
     /// Get comprehensive contract information
     pub fn get_contract_info(env: Env) -> ContractInfo {
+        let initialized = env.storage().instance().has(&DataKey::Admin);
+        let admin = if initialized {
+            match env.storage().instance().get(&DataKey::Admin) {
+                Some(addr) => MaybeAddress::Some(addr),
+                None => MaybeAddress::None,
+            }
+        } else {
+            MaybeAddress::None
+        };
+
         ContractInfo {
             metadata: Self::get_metadata(env.clone()),
-            initialized: env.storage().instance().has(&DataKey::Admin),
+            initialized,
             paused: env
                 .storage()
                 .instance()
                 .get(&DataKey::Paused)
                 .unwrap_or(false),
-            admin: env.storage().instance().get(&DataKey::Admin),
+            admin,
             total_snapshots: env
                 .storage()
                 .instance()
