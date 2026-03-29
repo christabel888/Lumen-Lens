@@ -1,14 +1,29 @@
 #![no_std]
+extern crate std;
 
 mod errors;
 mod events;
 
 use analytics::AnalyticsContractClient;
 use errors::Error;
-use events::{emit_proposal_created, emit_proposal_finalized, emit_vote_cast};
+use events::{
+    emit_governance_initialized, emit_proposal_created, emit_proposal_executed,
+    emit_proposal_finalized, emit_vote_cast,
+};
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Map, String};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// ~30 days at 5 s/ledger
+const LEDGERS_TO_EXTEND: u32 = 518_400;
+const INSTANCE_TTL_THRESHOLD: u32 = 100_000;
+const INSTANCE_TTL_EXTEND: u32 = 518_400;
+
+fn bump_instance(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+}
 
 // ============================================================================
 // Data Types
@@ -75,6 +90,7 @@ pub enum DataKey {
     ProposalCount,
     Quorum,
     VotingPeriod,
+    Version,
     Proposals,
     Votes(u64),
     VoteTally(u64),
@@ -130,7 +146,23 @@ impl GovernanceContract {
         env.storage()
             .instance()
             .set(&DataKey::VotingPeriod, &voting_period);
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &String::from_str(&env, VERSION));
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+
+        emit_governance_initialized(&env, admin, quorum, voting_period);
+
         Ok(())
+    }
+
+    pub fn get_version(env: Env) -> String {
+        env.storage()
+            .instance()
+            .get(&DataKey::Version)
+            .unwrap_or_else(|| String::from_str(&env, VERSION))
     }
 
     /// Create a new governance proposal. Only the admin can create proposals.
@@ -194,6 +226,11 @@ impl GovernanceContract {
         env.storage()
             .persistent()
             .set(&DataKey::Proposals, &proposals);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Proposals,
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
 
         // Initialize vote tally
         let tally = VoteTally {
@@ -205,17 +242,28 @@ impl GovernanceContract {
         env.storage()
             .persistent()
             .set(&DataKey::VoteTally(count), &tally);
+        env.storage().persistent().extend_ttl(
+            &DataKey::VoteTally(count),
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
 
         // Initialize votes map for this proposal
         let votes: Map<Address, VoteChoice> = Map::new(&env);
         env.storage()
             .persistent()
             .set(&DataKey::Votes(count), &votes);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Votes(count),
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
 
         // Update proposal count
         env.storage()
             .instance()
             .set(&DataKey::ProposalCount, &count);
+        bump_instance(&env);
 
         emit_proposal_created(&env, count, caller, target_contract, voting_ends_at);
 
@@ -283,10 +331,20 @@ impl GovernanceContract {
         env.storage()
             .persistent()
             .set(&DataKey::Proposals, &proposals);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Proposals,
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
 
         env.storage()
             .persistent()
             .set(&DataKey::ParameterAction(count), &action);
+        env.storage().persistent().extend_ttl(
+            &DataKey::ParameterAction(count),
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
 
         let tally = VoteTally {
             votes_for: 0,
@@ -297,15 +355,26 @@ impl GovernanceContract {
         env.storage()
             .persistent()
             .set(&DataKey::VoteTally(count), &tally);
+        env.storage().persistent().extend_ttl(
+            &DataKey::VoteTally(count),
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
 
         let votes: Map<Address, VoteChoice> = Map::new(&env);
         env.storage()
             .persistent()
             .set(&DataKey::Votes(count), &votes);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Votes(count),
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
 
         env.storage()
             .instance()
             .set(&DataKey::ProposalCount, &count);
+        bump_instance(&env);
 
         emit_proposal_created(&env, count, caller, target_contract, voting_ends_at);
 
@@ -357,6 +426,11 @@ impl GovernanceContract {
         env.storage()
             .persistent()
             .set(&DataKey::Votes(proposal_id), &votes);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Votes(proposal_id),
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
 
         // Update tally
         let mut tally: VoteTally = env
@@ -380,6 +454,11 @@ impl GovernanceContract {
         env.storage()
             .persistent()
             .set(&DataKey::VoteTally(proposal_id), &tally);
+        env.storage().persistent().extend_ttl(
+            &DataKey::VoteTally(proposal_id),
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
 
         let choice_val = choice as u32;
         emit_vote_cast(&env, proposal_id, voter, choice_val);
@@ -434,6 +513,11 @@ impl GovernanceContract {
         env.storage()
             .persistent()
             .set(&DataKey::Proposals, &proposals);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Proposals,
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
 
         let status_val = new_status.clone() as u32;
         emit_proposal_finalized(
@@ -494,10 +578,19 @@ impl GovernanceContract {
         // Upgrade proposals: execution is off-chain (deploy new WASM); we only mark executed here.
 
         proposal.status = ProposalStatus::Executed;
+        let target_contract = proposal.target_contract.clone();
         proposals.set(proposal_id, proposal);
         env.storage()
             .persistent()
             .set(&DataKey::Proposals, &proposals);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Proposals,
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
+        bump_instance(&env);
+
+        emit_proposal_executed(&env, proposal_id, caller, target_contract);
 
         Ok(())
     }
@@ -508,6 +601,13 @@ impl GovernanceContract {
 
     /// Get a proposal by ID.
     pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, Error> {
+        if env.storage().persistent().has(&DataKey::Proposals) {
+            env.storage().persistent().extend_ttl(
+                &DataKey::Proposals,
+                LEDGERS_TO_EXTEND,
+                LEDGERS_TO_EXTEND,
+            );
+        }
         let proposals: Map<u64, Proposal> = env
             .storage()
             .persistent()
@@ -519,6 +619,17 @@ impl GovernanceContract {
 
     /// Get the vote tally for a proposal.
     pub fn get_tally(env: Env, proposal_id: u64) -> Result<VoteTally, Error> {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::VoteTally(proposal_id))
+        {
+            env.storage().persistent().extend_ttl(
+                &DataKey::VoteTally(proposal_id),
+                LEDGERS_TO_EXTEND,
+                LEDGERS_TO_EXTEND,
+            );
+        }
         env.storage()
             .persistent()
             .get(&DataKey::VoteTally(proposal_id))
@@ -527,6 +638,17 @@ impl GovernanceContract {
 
     /// Check if an address has voted on a proposal.
     pub fn has_voted(env: Env, proposal_id: u64, voter: Address) -> bool {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Votes(proposal_id))
+        {
+            env.storage().persistent().extend_ttl(
+                &DataKey::Votes(proposal_id),
+                LEDGERS_TO_EXTEND,
+                LEDGERS_TO_EXTEND,
+            );
+        }
         let votes: Map<Address, VoteChoice> = env
             .storage()
             .persistent()

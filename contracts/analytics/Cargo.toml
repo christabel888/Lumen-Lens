@@ -13,6 +13,11 @@ panic = "deny"
 
 [dependencies]
 soroban-sdk = { workspace = true }
+soroban-token-sdk = { workspace = true }
 
 [dev-dependencies]
+arbitrary = { version = "1.3", features = ["derive"] }
+bolero = "0.13.4"
+bolero-generator = "0.13"
 soroban-sdk = { workspace = true, features = ["testutils"] }
+
