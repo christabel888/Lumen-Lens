@@ -1,6 +1,4 @@
 #![no_std]
-#![allow(unreachable_patterns)]
-extern crate std;
 
 mod errors;
 mod events;
@@ -213,7 +211,6 @@ impl StellarInsightsContract {
             .set(&DataKey::Snapshots, &snapshots);
 
         // Extend storage TTL (~30 days at 5s per ledger)
-        const LEDGERS_TO_EXTEND: u32 = 518_400;
         env.storage().persistent().extend_ttl(
             &DataKey::Snapshots,
             LEDGERS_TO_EXTEND,
@@ -246,7 +243,6 @@ impl StellarInsightsContract {
     /// * The 32-byte hash stored for that epoch
     pub fn get_snapshot(env: Env, epoch: u64) -> Result<BytesN<32>, Error> {
         // Extend TTL on read to keep data alive
-        const LEDGERS_TO_EXTEND: u32 = 518_400;
         if env.storage().persistent().has(&DataKey::Snapshots) {
             env.storage().persistent().extend_ttl(
                 &DataKey::Snapshots,
@@ -348,7 +344,7 @@ impl StellarInsightsContract {
     ///
     /// # Errors
     /// * `Error::AdminNotSet` - If admin was not initialized
-    /// * `Error::UnauthorizedCaller` - If caller is not the admin
+    /// * `Error::Unauthorized` - If caller is not the admin
     pub fn pause(env: Env, caller: Address) -> Result<(), Error> {
         caller.require_auth();
 
@@ -359,7 +355,7 @@ impl StellarInsightsContract {
             .ok_or(Error::AdminNotSet)?;
 
         if caller != admin {
-            return Err(Error::UnauthorizedCaller);
+            return Err(Error::Unauthorized);
         }
 
         env.storage().instance().set(&DataKey::Paused, &true);
@@ -377,7 +373,7 @@ impl StellarInsightsContract {
     ///
     /// # Errors
     /// * `Error::AdminNotSet` - If admin was not initialized
-    /// * `Error::UnauthorizedCaller` - If caller is not the admin
+    /// * `Error::Unauthorized` - If caller is not the admin
     pub fn unpause(env: Env, caller: Address) -> Result<(), Error> {
         caller.require_auth();
 
@@ -388,7 +384,7 @@ impl StellarInsightsContract {
             .ok_or(Error::AdminNotSet)?;
 
         if caller != admin {
-            return Err(Error::UnauthorizedCaller);
+            return Err(Error::Unauthorized);
         }
 
         env.storage().instance().set(&DataKey::Paused, &false);
