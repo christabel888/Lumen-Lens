@@ -1,4 +1,5 @@
 #![no_std]
+use soroban_sdk::testutils::Events;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
     Symbol, Vec,
@@ -18,10 +19,13 @@ fn bump_instance(env: &Env) {
 }
 
 #[contracterror]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
     Unauthorized = 1,
+    RoleNotFound = 2,
+    PermissionDenied = 3,
+    InvalidRole = 4,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -300,6 +304,13 @@ impl AccessControlContract {
             .get::<DataKey, Vec<Role>>(&DataKey::Roles(user.clone()))
         {
             for r in roles.iter() {
+                if Self::roles_equal(&r, &role) {
+                    return Ok(());
+                }
+            }
+            return Err(Error::PermissionDenied);
+        }
+        Err(Error::RoleNotFound)
                 if role_level(&r) >= required_level {
                     return Ok(());
                 }
