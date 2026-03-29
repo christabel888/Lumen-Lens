@@ -5,7 +5,18 @@ use soroban_sdk::{
     Symbol, Vec,
 };
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// ~30 days at 5 s/ledger
+const LEDGERS_TO_EXTEND: u32 = 518_400;
+const INSTANCE_TTL_THRESHOLD: u32 = 100_000;
+const INSTANCE_TTL_EXTEND: u32 = 518_400;
+
+fn bump_instance(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+}
 
 #[contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -20,6 +31,7 @@ pub enum Error {
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum Role {
+    SuperAdmin,
     Admin,
     Operator,
     Viewer,
@@ -36,6 +48,7 @@ pub struct Permission {
 pub enum DataKey {
     Roles(Address),
     Permissions(Role),
+    Version,
 }
 
 // ---------------------------------------------------------------------------
@@ -70,12 +83,12 @@ pub struct PermissionGrantedEvent {
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct PublicMetadata {
-    pub name: String,
-    pub version: String,
-    pub author: String,
-    pub description: String,
-    pub repository: String,
-    pub license: String,
+    pub name: soroban_sdk::String,
+    pub version: soroban_sdk::String,
+    pub author: soroban_sdk::String,
+    pub description: soroban_sdk::String,
+    pub repository: soroban_sdk::String,
+    pub license: soroban_sdk::String,
 }
 
 /// Contract info combining metadata with runtime state
@@ -88,17 +101,35 @@ pub struct ContractInfo {
 }
 
 #[contract]
-pub struct AccessControl;
+pub struct AccessControlContract;
 
 #[contractimpl]
-impl AccessControl {
+impl AccessControlContract {
     pub fn initialize(env: Env, admin: Address) {
         admin.require_auth();
         let mut roles = Vec::new(&env);
-        roles.push_back(Role::Admin);
+        roles.push_back(Role::SuperAdmin);
         env.storage()
             .persistent()
-            .set(&DataKey::Roles(admin), &roles);
+            .set(&DataKey::Roles(admin.clone()), &roles);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Roles(admin),
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &String::from_str(&env, VERSION));
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+    }
+
+    pub fn get_version(env: Env) -> String {
+        env.storage()
+            .instance()
+            .get(&DataKey::Version)
+            .unwrap_or_else(|| String::from_str(&env, VERSION))
     }
 
     pub fn grant_role(env: Env, caller: Address, user: Address, role: Role) -> Result<(), Error> {
@@ -114,6 +145,12 @@ impl AccessControl {
         env.storage()
             .persistent()
             .set(&DataKey::Roles(user.clone()), &roles);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Roles(user.clone()),
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
+        bump_instance(&env);
 
         env.events().publish(
             (symbol_short!("role_grnt"), user.clone()),
@@ -137,13 +174,19 @@ impl AccessControl {
         {
             let mut new_roles = Vec::new(&env);
             for r in roles.iter() {
-                if !Self::roles_equal(&r, &role) {
+                if !roles_equal(&r, &role) {
                     new_roles.push_back(r);
                 }
             }
             env.storage()
                 .persistent()
                 .set(&DataKey::Roles(user.clone()), &new_roles);
+            env.storage().persistent().extend_ttl(
+                &DataKey::Roles(user.clone()),
+                LEDGERS_TO_EXTEND,
+                LEDGERS_TO_EXTEND,
+            );
+            bump_instance(&env);
 
             env.events().publish(
                 (symbol_short!("role_rvk"), user.clone()),
@@ -164,7 +207,7 @@ impl AccessControl {
             .get::<DataKey, Vec<Role>>(&DataKey::Roles(user))
         {
             for r in roles.iter() {
-                if Self::roles_equal(&r, &role) {
+                if roles_equal(&r, &role) {
                     return true;
                 }
             }
@@ -190,6 +233,12 @@ impl AccessControl {
         env.storage()
             .persistent()
             .set(&DataKey::Permissions(role.clone()), &perms);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Permissions(role.clone()),
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
+        bump_instance(&env);
 
         env.events().publish(
             (symbol_short!("perm_grnt"), role.clone()),
@@ -202,25 +251,43 @@ impl AccessControl {
         Ok(())
     }
 
+    /// Check if a user has permission for a given function.
+    /// SuperAdmin and Admin have all permissions (bypass).
+    /// For other roles, checks the user's roles and inherited lower-role permissions.
     pub fn check_permission(env: Env, user: Address, function: Symbol) -> bool {
-        if Self::has_role(env.clone(), user.clone(), Role::Admin) {
-            return true;
-        }
-
         if let Some(roles) = env
             .storage()
             .persistent()
             .get::<DataKey, Vec<Role>>(&DataKey::Roles(user))
         {
-            for role in roles.iter() {
-                if let Some(perms) = env
-                    .storage()
-                    .persistent()
-                    .get::<DataKey, Vec<Symbol>>(&DataKey::Permissions(role))
-                {
-                    for perm in perms.iter() {
-                        if perm == function {
-                            return true;
+            // Find the highest role level the user has
+            let mut max_level = 0u32;
+            for r in roles.iter() {
+                let level = role_level(&r);
+                if level > max_level {
+                    max_level = level;
+                }
+            }
+
+            // SuperAdmin and Admin have all permissions
+            if max_level >= role_level(&Role::Admin) {
+                return true;
+            }
+
+            // Check permissions for all roles at or below the user's highest level.
+            // This implements role inheritance: e.g. an Operator inherits Viewer permissions.
+            let checkable = [Role::Operator, Role::Viewer];
+            for check_role in checkable.iter() {
+                if role_level(check_role) <= max_level {
+                    if let Some(perms) = env
+                        .storage()
+                        .persistent()
+                        .get::<DataKey, Vec<Symbol>>(&DataKey::Permissions(check_role.clone()))
+                    {
+                        for perm in perms.iter() {
+                            if perm == function {
+                                return true;
+                            }
                         }
                     }
                 }
@@ -230,6 +297,7 @@ impl AccessControl {
     }
 
     fn require_role(env: &Env, user: &Address, role: Role) -> Result<(), Error> {
+        let required_level = role_level(&role);
         if let Some(roles) = env
             .storage()
             .persistent()
@@ -243,43 +311,61 @@ impl AccessControl {
             return Err(Error::PermissionDenied);
         }
         Err(Error::RoleNotFound)
+                if role_level(&r) >= required_level {
+                    return Ok(());
+                }
+            }
+        }
+        Err(Error::Unauthorized)
     }
-
-    fn roles_equal(a: &Role, b: &Role) -> bool {
-        matches!(
-            (a, b),
-            (Role::Admin, Role::Admin)
-                | (Role::Operator, Role::Operator)
-                | (Role::Viewer, Role::Viewer)
-        )
-    }
-
-    // =========================================================================
-    // Contract Metadata
-    // =========================================================================
 
     /// Get public contract metadata
     pub fn get_metadata(env: Env) -> PublicMetadata {
         PublicMetadata {
-            name: String::from_str(&env, "Stellar Insights Access Control"),
-            version: String::from_str(&env, VERSION),
-            author: String::from_str(&env, "Stellar Insights Team"),
-            description: String::from_str(
+            name: soroban_sdk::String::from_str(&env, "Stellar Insights Access Control"),
+            version: soroban_sdk::String::from_str(&env, VERSION),
+            author: soroban_sdk::String::from_str(&env, "Stellar Insights Team"),
+            description: soroban_sdk::String::from_str(
                 &env,
                 "Role-based access control contract for Stellar Insights",
             ),
-            repository: String::from_str(&env, "https://github.com/stellar-insights/contracts"),
-            license: String::from_str(&env, "MIT"),
+            repository: soroban_sdk::String::from_str(
+                &env,
+                "https://github.com/stellar-insights/contracts",
+            ),
+            license: soroban_sdk::String::from_str(&env, "MIT"),
         }
     }
 
     /// Get comprehensive contract information
     pub fn get_contract_info(env: Env) -> ContractInfo {
+        // Check if contract is initialized by looking for the version key
+        let initialized = env.storage().instance().has(&DataKey::Version);
+
         ContractInfo {
             metadata: Self::get_metadata(env),
-            initialized: true,
+            initialized,
             total_roles: 0,
         }
+    }
+}
+
+fn roles_equal(a: &Role, b: &Role) -> bool {
+    matches!(
+        (a, b),
+        (Role::SuperAdmin, Role::SuperAdmin)
+            | (Role::Admin, Role::Admin)
+            | (Role::Operator, Role::Operator)
+            | (Role::Viewer, Role::Viewer)
+    )
+}
+
+fn role_level(role: &Role) -> u32 {
+    match role {
+        Role::Viewer => 1,
+        Role::Operator => 2,
+        Role::Admin => 3,
+        Role::SuperAdmin => 4,
     }
 }
 
@@ -289,13 +375,16 @@ impl AccessControl {
 #[allow(clippy::panic)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        Env, Val, Vec,
+    };
 
     macro_rules! setup {
         ($env:ident, $client:ident, $admin:ident) => {
             let $env = Env::default();
-            let contract_id = $env.register_contract(None, AccessControl);
-            let $client = AccessControlClient::new(&$env, &contract_id);
+            let contract_id = $env.register_contract(None, AccessControlContract);
+            let $client = AccessControlContractClient::new(&$env, &contract_id);
             let $admin = Address::generate(&$env);
             $env.mock_all_auths();
             $client.initialize(&$admin);
@@ -307,9 +396,15 @@ mod test {
     // =========================================================================
 
     #[test]
-    fn test_initialize_grants_admin_role() {
+    fn test_initialize_grants_super_admin_role() {
         setup!(env, client, admin);
-        assert!(client.has_role(&admin, &Role::Admin));
+        assert!(client.has_role(&admin, &Role::SuperAdmin));
+    }
+
+    #[test]
+    fn test_initialize_does_not_grant_admin_to_initializer() {
+        setup!(env, client, admin);
+        assert!(!client.has_role(&admin, &Role::Admin));
     }
 
     #[test]
@@ -382,21 +477,35 @@ mod test {
     }
 
     // =========================================================================
-    // role hierarchy
+    // role hierarchy — require_role uses has_permission
     // =========================================================================
 
     #[test]
-    fn test_role_hierarchy_admin_can_grant_any_role() {
+    fn test_role_hierarchy_super_admin_can_grant_any_role() {
         setup!(env, client, admin);
         let u1 = Address::generate(&env);
         let u2 = Address::generate(&env);
         let u3 = Address::generate(&env);
-        client.grant_role(&admin, &u1, &Role::Admin);
-        client.grant_role(&admin, &u2, &Role::Operator);
-        client.grant_role(&admin, &u3, &Role::Viewer);
-        assert!(client.has_role(&u1, &Role::Admin));
-        assert!(client.has_role(&u2, &Role::Operator));
-        assert!(client.has_role(&u3, &Role::Viewer));
+        let u4 = Address::generate(&env);
+        client.grant_role(&admin, &u1, &Role::SuperAdmin);
+        client.grant_role(&admin, &u2, &Role::Admin);
+        client.grant_role(&admin, &u3, &Role::Operator);
+        client.grant_role(&admin, &u4, &Role::Viewer);
+        assert!(client.has_role(&u1, &Role::SuperAdmin));
+        assert!(client.has_role(&u2, &Role::Admin));
+        assert!(client.has_role(&u3, &Role::Operator));
+        assert!(client.has_role(&u4, &Role::Viewer));
+    }
+
+    #[test]
+    fn test_role_hierarchy_admin_can_grant_roles() {
+        setup!(env, client, admin);
+        let admin_user = Address::generate(&env);
+        let target = Address::generate(&env);
+        client.grant_role(&admin, &admin_user, &Role::Admin);
+        // Admin satisfies the Admin requirement via hierarchy
+        client.grant_role(&admin_user, &target, &Role::Operator);
+        assert!(client.has_role(&target, &Role::Operator));
     }
 
     #[test]
@@ -410,6 +519,16 @@ mod test {
     }
 
     #[test]
+    fn test_role_hierarchy_operator_cannot_grant() {
+        setup!(env, client, admin);
+        let operator = Address::generate(&env);
+        let target = Address::generate(&env);
+        client.grant_role(&admin, &operator, &Role::Operator);
+        let result = client.try_grant_role(&operator, &target, &Role::Viewer);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_role_hierarchy_new_admin_can_grant() {
         setup!(env, client, admin);
         let new_admin = Address::generate(&env);
@@ -417,6 +536,72 @@ mod test {
         client.grant_role(&admin, &new_admin, &Role::Admin);
         client.grant_role(&new_admin, &user, &Role::Operator);
         assert!(client.has_role(&user, &Role::Operator));
+    }
+
+    #[test]
+    fn test_role_hierarchy_super_admin_satisfies_all() {
+        setup!(env, client, admin);
+        // SuperAdmin (the initializer) can call grant_role which requires Admin
+        let user = Address::generate(&env);
+        client.grant_role(&admin, &user, &Role::Viewer);
+        assert!(client.has_role(&user, &Role::Viewer));
+    }
+
+    #[test]
+    fn test_role_hierarchy_admin_satisfies_admin_and_below() {
+        setup!(env, client, admin);
+        let admin_user = Address::generate(&env);
+        client.grant_role(&admin, &admin_user, &Role::Admin);
+        // Admin can revoke roles (requires Admin level)
+        let user = Address::generate(&env);
+        client.grant_role(&admin, &user, &Role::Operator);
+        client.revoke_role(&admin_user, &user, &Role::Operator);
+        assert!(!client.has_role(&user, &Role::Operator));
+    }
+
+    // =========================================================================
+    // role inheritance — higher roles inherit lower role permissions
+    // =========================================================================
+
+    #[test]
+    fn test_role_inheritance_operator_inherits_viewer_permissions() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+        let func = symbol_short!("read");
+        client.grant_role(&admin, &user, &Role::Operator);
+        // Grant permission only to Viewer role
+        client.grant_permission(&admin, &Role::Viewer, &func);
+        // Operator should inherit Viewer permissions
+        assert!(client.check_permission(&user, &func));
+    }
+
+    #[test]
+    fn test_role_inheritance_viewer_does_not_inherit_operator_permissions() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+        let func = symbol_short!("submit");
+        client.grant_role(&admin, &user, &Role::Viewer);
+        client.grant_permission(&admin, &Role::Operator, &func);
+        // Viewer should NOT have Operator permissions
+        assert!(!client.check_permission(&user, &func));
+    }
+
+    #[test]
+    fn test_role_inheritance_admin_has_all_permissions() {
+        setup!(env, client, admin);
+        let admin_user = Address::generate(&env);
+        client.grant_role(&admin, &admin_user, &Role::Admin);
+        let func = symbol_short!("anything");
+        // Admin has all permissions (bypass)
+        assert!(client.check_permission(&admin_user, &func));
+    }
+
+    #[test]
+    fn test_role_inheritance_super_admin_has_all_permissions() {
+        setup!(env, client, admin);
+        let func = symbol_short!("anything");
+        // SuperAdmin (initializer) has all permissions
+        assert!(client.check_permission(&admin, &func));
     }
 
     // =========================================================================
@@ -464,13 +649,14 @@ mod test {
     }
 
     // =========================================================================
-    // has_role
+    // has_role (exact match)
     // =========================================================================
 
     #[test]
     fn test_has_role_returns_false_for_unknown_user() {
         setup!(env, client, _admin);
         let stranger = Address::generate(&env);
+        assert!(!client.has_role(&stranger, &Role::SuperAdmin));
         assert!(!client.has_role(&stranger, &Role::Admin));
         assert!(!client.has_role(&stranger, &Role::Operator));
         assert!(!client.has_role(&stranger, &Role::Viewer));
@@ -484,6 +670,17 @@ mod test {
         client.grant_role(&admin, &u1, &Role::Operator);
         assert!(client.has_role(&u1, &Role::Operator));
         assert!(!client.has_role(&u2, &Role::Operator));
+    }
+
+    #[test]
+    fn test_has_role_is_exact_match() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+        client.grant_role(&admin, &user, &Role::Operator);
+        // has_role is exact match — Operator is not Admin
+        assert!(!client.has_role(&user, &Role::Admin));
+        assert!(!client.has_role(&user, &Role::SuperAdmin));
+        assert!(client.has_role(&user, &Role::Operator));
     }
 
     // =========================================================================
@@ -528,10 +725,19 @@ mod test {
     // =========================================================================
 
     #[test]
-    fn test_check_permission_admin_has_all() {
+    fn test_check_permission_super_admin_has_all() {
         setup!(env, client, admin);
         let func = symbol_short!("anything");
         assert!(client.check_permission(&admin, &func));
+    }
+
+    #[test]
+    fn test_check_permission_admin_has_all() {
+        setup!(env, client, admin);
+        let admin_user = Address::generate(&env);
+        client.grant_role(&admin, &admin_user, &Role::Admin);
+        let func = symbol_short!("anything");
+        assert!(client.check_permission(&admin_user, &func));
     }
 
     #[test]
@@ -601,7 +807,7 @@ mod test {
         assert!(!events.is_empty());
         // The last event should be the role_grnt event for the user grant
         // (initialize emits nothing, so only the grant_role event is present)
-        let (topics, data): (soroban_sdk::Vec<soroban_sdk::Val>, RoleGrantedEvent) = events
+        let (topics, data): (soroban_sdk::Vec<Val>, RoleGrantedEvent) = events
             .last()
             .map(|(_, t, d)| (t, soroban_sdk::FromVal::from_val(&env, &d)))
             .unwrap();
@@ -676,5 +882,70 @@ mod test {
         assert_eq!(data.admin, admin);
         assert_eq!(data.function, func);
         assert!(matches!(data.role, Role::Operator));
+    }
+
+    #[test]
+    fn test_grant_role_unauthorized_issue_689() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AccessControlContract);
+        let client = AccessControlContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let user = Address::generate(&env);
+        let unauthorized = Address::generate(&env);
+
+        env.mock_all_auths();
+        client.initialize(&admin);
+
+        // Should fail - unauthorized user trying to grant role
+        let result = client.try_grant_role(&unauthorized, &user, &Role::Admin);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_role_hierarchy_issue_689() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+        let target = Address::generate(&env);
+
+        // Test that admin can grant any role
+        client.grant_role(&admin, &user, &Role::Admin);
+        assert!(client.has_role(&user, &Role::Admin));
+
+        // Test that non-admin (Viewer) cannot grant roles
+        let viewer = Address::generate(&env);
+        client.grant_role(&admin, &viewer, &Role::Viewer);
+        let result = client.try_grant_role(&viewer, &target, &Role::Operator);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_revoke_role_issue_689() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+
+        // Grant and then revoke
+        client.grant_role(&admin, &user, &Role::Operator);
+        assert!(client.has_role(&user, &Role::Operator));
+
+        client.revoke_role(&admin, &user, &Role::Operator);
+        assert!(!client.has_role(&user, &Role::Operator));
+    }
+
+    #[test]
+    fn test_check_permission_issue_689() {
+        setup!(env, client, admin);
+        let user = Address::generate(&env);
+        let func = symbol_short!("execute");
+
+        client.grant_role(&admin, &user, &Role::Operator);
+        client.grant_permission(&admin, &Role::Operator, &func);
+
+        // Test permission checking
+        assert!(client.check_permission(&user, &func));
+
+        // Test unauthorized permission checking
+        let stranger = Address::generate(&env);
+        assert!(!client.check_permission(&stranger, &func));
     }
 }

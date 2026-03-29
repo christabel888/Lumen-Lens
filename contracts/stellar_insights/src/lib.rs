@@ -1,4 +1,6 @@
 #![no_std]
+#![allow(unreachable_patterns)]
+extern crate std;
 
 mod errors;
 mod events;
@@ -8,6 +10,17 @@ use events::emit_snapshot_submitted;
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Map, String};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// ~30 days at 5 s/ledger
+const LEDGERS_TO_EXTEND: u32 = 518_400;
+const INSTANCE_TTL_THRESHOLD: u32 = 100_000;
+const INSTANCE_TTL_EXTEND: u32 = 518_400;
+
+fn bump_instance(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
+}
 
 /// Storage keys for persistent contract data
 #[contracttype]
@@ -21,6 +34,8 @@ pub enum DataKey {
     LatestEpoch,
     /// Emergency pause state (true = paused, false = active)
     Paused,
+    /// Contract package version at initialization
+    Version,
 }
 
 /// Analytics snapshot data structure
@@ -85,7 +100,20 @@ impl StellarInsightsContract {
 
         // Initialize contract as not paused
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &String::from_str(&env, VERSION));
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
         Ok(())
+    }
+
+    pub fn get_version(env: Env) -> String {
+        env.storage()
+            .instance()
+            .get(&DataKey::Version)
+            .unwrap_or_else(|| String::from_str(&env, VERSION))
     }
 
     /// Submit a cryptographic hash of an analytics snapshot on-chain
@@ -184,6 +212,14 @@ impl StellarInsightsContract {
             .persistent()
             .set(&DataKey::Snapshots, &snapshots);
 
+        // Extend storage TTL (~30 days at 5s per ledger)
+        const LEDGERS_TO_EXTEND: u32 = 518_400;
+        env.storage().persistent().extend_ttl(
+            &DataKey::Snapshots,
+            LEDGERS_TO_EXTEND,
+            LEDGERS_TO_EXTEND,
+        );
+
         env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
 
         // Emit structured event for off-chain indexing
@@ -209,6 +245,15 @@ impl StellarInsightsContract {
     /// # Returns
     /// * The 32-byte hash stored for that epoch
     pub fn get_snapshot(env: Env, epoch: u64) -> Result<BytesN<32>, Error> {
+        // Extend TTL on read to keep data alive
+        const LEDGERS_TO_EXTEND: u32 = 518_400;
+        if env.storage().persistent().has(&DataKey::Snapshots) {
+            env.storage().persistent().extend_ttl(
+                &DataKey::Snapshots,
+                LEDGERS_TO_EXTEND,
+                LEDGERS_TO_EXTEND,
+            );
+        }
         let snapshots: Map<u64, Snapshot> = env
             .storage()
             .persistent()
@@ -240,6 +285,14 @@ impl StellarInsightsContract {
 
         if latest_epoch == 0 {
             return Err(Error::SnapshotNotFound);
+        }
+
+        if env.storage().persistent().has(&DataKey::Snapshots) {
+            env.storage().persistent().extend_ttl(
+                &DataKey::Snapshots,
+                LEDGERS_TO_EXTEND,
+                LEDGERS_TO_EXTEND,
+            );
         }
 
         let snapshots: Map<u64, Snapshot> = env
@@ -310,6 +363,7 @@ impl StellarInsightsContract {
         }
 
         env.storage().instance().set(&DataKey::Paused, &true);
+        bump_instance(&env);
         Ok(())
     }
 
@@ -338,6 +392,7 @@ impl StellarInsightsContract {
         }
 
         env.storage().instance().set(&DataKey::Paused, &false);
+        bump_instance(&env);
         Ok(())
     }
 
