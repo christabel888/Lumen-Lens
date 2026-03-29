@@ -1,4 +1,5 @@
 #![no_std]
+extern crate std;
 
 mod errors;
 
@@ -311,6 +312,7 @@ fn check_rate_limit(env: &Env, caller: &Address) -> Result<(), Error> {
     }
 
     if rate_info.call_count >= MAX_CALLS_PER_WINDOW {
+        emit_error_event(env, ContractError::Unauthorized, "rate_limit", caller, "Rate limit exceeded");
         return Err(Error::RateLimitExceeded
             .log_context(env, "check_rate_limit: too many calls in this window"));
     }
@@ -352,6 +354,7 @@ fn require_initialized(env: &Env) -> Result<(), Error> {
 /// Validate epoch ordering; returns the current latest epoch on success.
 fn validate_epoch(env: &Env, epoch: u64) -> Result<u64, Error> {
     if epoch == 0 {
+        // emit_error_event not easily callable here without caller address; handled in calling methods
         return Err(Error::InvalidEpochZero.log_context(env, "validate_epoch: epoch must be > 0"));
     }
     let latest: u64 = env
@@ -499,6 +502,7 @@ impl AnalyticsContract {
             .get(&DataKey::Paused)
             .unwrap_or(false);
         if is_paused {
+            emit_error_event(&env, ContractError::ContractPaused, "submit_snapshot", &caller, "Paused");
             return Err(
                 Error::ContractPaused.log_context(&env, "submit_snapshot: contract is paused")
             );
@@ -509,6 +513,7 @@ impl AnalyticsContract {
 
         let admin = require_admin(&env)?;
         if caller != admin {
+            emit_error_event(&env, ContractError::Unauthorized, "submit_snapshot", &caller, "Unauthorized caller");
             return Err(
                 Error::Unauthorized.log_context(&env, "submit_snapshot: caller is not the admin")
             );
@@ -966,6 +971,7 @@ impl AnalyticsContract {
         current_admin.require_auth();
         let old_admin = require_admin(&env)?;
         if current_admin != old_admin {
+            emit_error_event(&env, ContractError::Unauthorized, "set_admin", &current_admin, "Unauthorized transfer attempt");
             return Err(
                 Error::Unauthorized.log_context(&env, "set_admin: caller is not the current admin")
             );
