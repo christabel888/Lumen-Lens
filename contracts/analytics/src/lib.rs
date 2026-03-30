@@ -1279,8 +1279,6 @@ impl AnalyticsContract {
 
         // Perform upgrade
         env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
-        env.deployer()
-            .update_current_contract_wasm(new_wasm_hash.clone());
         bump_instance(&env);
 
         // Emit event
