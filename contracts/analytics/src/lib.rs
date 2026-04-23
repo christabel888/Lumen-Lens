@@ -337,10 +337,15 @@ pub enum DataKey {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DEFAULT_SNAPSHOT_TTL: u64 = 7_776_000; // 90 days in seconds
-const LEDGER_SECONDS: u64 = 5; // ~5 seconds per ledger
+/// Default snapshot TTL: 90 days in seconds. Override via `ContractConfig.rate_limit_window`.
+const DEFAULT_SNAPSHOT_TTL: u64 = 7_776_000;
+/// Approximate seconds per Stellar ledger (used to convert TTL seconds → ledgers).
+const LEDGER_SECONDS: u64 = 5;
+/// Default rate-limit window in seconds (1 hour). Configurable via `ContractConfig`.
 const RATE_LIMIT_WINDOW: u64 = 3600;
+/// Default max calls per rate-limit window. Configurable via `ContractConfig`.
 const MAX_CALLS_PER_WINDOW: u32 = 100;
+/// Default timelock delay in seconds (48 hours). Configurable via `ContractConfig`.
 const TIMELOCK_DELAY: u64 = 172_800;
 
 // ── Private helpers ───────────────────────────────────────────────────────────
@@ -472,9 +477,13 @@ fn validate_epoch(env: &Env, epoch: u64) -> Result<u64, Error> {
 /// Write one snapshot to per-epoch persistent storage and update the shared map + latest epoch.
 /// All persistent entries are extended to LEDGERS_TO_EXTEND; instance storage is bumped
 /// on every write so the contract itself never expires while it is actively used.
-const LEDGERS_TO_EXTEND: u32 = 518_400; // ~30 days at 5s/ledger
-const INSTANCE_TTL_THRESHOLD: u32 = 100_000; // bump instance when TTL falls below ~6 days
-const INSTANCE_TTL_EXTEND: u32 = 518_400; // extend instance to ~30 days
+/// Ledgers to extend persistent storage TTL (~30 days at 5 s/ledger).
+/// Configurable at runtime via `ContractConfig` passed to `initialize`.
+const LEDGERS_TO_EXTEND: u32 = 518_400;
+/// Bump instance storage when TTL falls below this threshold (~6 days).
+const INSTANCE_TTL_THRESHOLD: u32 = 100_000;
+/// Extend instance storage to this TTL (~30 days).
+const INSTANCE_TTL_EXTEND: u32 = 518_400;
 
 /// Bump instance storage TTL so admin/config keys never expire while the contract is in use.
 fn bump_instance(env: &Env) {
@@ -694,7 +703,6 @@ impl AnalyticsContract {
 
         write_snapshot(&env, epoch, &metadata, &mut snapshots);
 
-        const LEDGERS_TO_EXTEND: u32 = 518_400; // ~30 days
         env.storage().persistent().extend_ttl(
             &DataKey::Snapshots,
             LEDGERS_TO_EXTEND,
