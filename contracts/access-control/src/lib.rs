@@ -54,6 +54,11 @@ pub enum DataKey {
 // Event types — emitted on every access-control mutation for audit trails
 // ---------------------------------------------------------------------------
 
+/// Event emitted when a role is granted to a user via `grant_role`.
+///
+/// `admin` is the (already-authorized) caller who granted it, `user` is the
+/// address the role was granted to, and `role` is the single role just
+/// added -- a user may hold multiple roles, this event does not enumerate them.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoleGrantedEvent {
@@ -62,6 +67,11 @@ pub struct RoleGrantedEvent {
     pub role: Role,
 }
 
+/// Event emitted when a role is revoked from a user via `revoke_role`.
+///
+/// Only fires if `user` had a roles entry in storage at all; revoking a role
+/// from a user who was never granted anything is a silent no-op (see the
+/// `revoke_role` call site for the exact condition).
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoleRevokedEvent {
@@ -70,6 +80,9 @@ pub struct RoleRevokedEvent {
     pub role: Role,
 }
 
+/// Event emitted when a function permission is granted to a role via
+/// `grant_permission`. `function` identifies the permitted call by Soroban
+/// `Symbol`, not full signature.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PermissionGrantedEvent {
@@ -132,6 +145,10 @@ impl AccessControlContract {
             .instance()
             .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
 
+        // Fires exactly once, at the end of the first `initialize` call (the
+        // function has no re-initialization guard beyond overwriting storage,
+        // so this event is emitted on every call -- callers should only call
+        // `initialize` once per deployment). Consumed by the New Deployments panel.
         env.events().publish(
             (symbol_short!("ac_init"),),
             InitializedEvent {
@@ -169,6 +186,11 @@ impl AccessControlContract {
         );
         bump_instance(&env);
 
+        // Fires once per successful `grant_role` call, after the role is
+        // appended to the user's role list in storage. `role` is the role
+        // just granted (a user may hold several; this event does not list
+        // the others). `admin` is the caller, who must already hold the
+        // `Admin` role or higher (see `require_role`).
         env.events().publish(
             (symbol_short!("role_grnt"), user.clone()),
             RoleGrantedEvent {
@@ -205,6 +227,12 @@ impl AccessControlContract {
             );
             bump_instance(&env);
 
+            // Fires whenever `user` has *any* roles entry in storage (the
+            // outer `if let Some(roles)` guard), regardless of whether they
+            // actually held `role` -- if they didn't, the filtered role list
+            // is written back unchanged and this event still fires. If the
+            // user has no roles entry at all (never granted anything), this
+            // whole block -- including the event -- is skipped entirely.
             env.events().publish(
                 (symbol_short!("role_rvk"), user.clone()),
                 RoleRevokedEvent {
@@ -257,6 +285,10 @@ impl AccessControlContract {
         );
         bump_instance(&env);
 
+        // Fires once per successful `grant_permission` call, after the
+        // function symbol is appended to the role's permission list.
+        // `function` is the Soroban `Symbol` being permitted, not a full
+        // function signature -- callers matching by symbol name only.
         env.events().publish(
             (symbol_short!("perm_grnt"), role.clone()),
             PermissionGrantedEvent {
@@ -379,7 +411,9 @@ impl AccessControlContract {
         env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
         bump_instance(&env);
 
-        // Emit event
+        // Fires once per successful Wasm upgrade (SuperAdmin-only, after
+        // `update_current_contract_wasm` has already taken effect). Untyped
+        // tuple payload: (caller, new_wasm_hash).
         env.events().publish(
             (symbol_short!("upgrade"),),
             (caller, new_wasm_hash),
