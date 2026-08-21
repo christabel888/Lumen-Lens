@@ -225,6 +225,42 @@ fn test_older_epoch_rejected() {
 }
 
 #[test]
+fn test_initialize_emits_deployed_event() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, StellarInsightsContract);
+    let client = StellarInsightsContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let deployed_count = count_contract_events_with_topic0(&env, symbol_short!("deployed"));
+    assert_eq!(
+        deployed_count, 1,
+        "expected exactly one 'deployed' event from initialize"
+    );
+
+    let raw = env.events().all();
+    let deployed_event = raw.events().iter().find(|e| {
+        let soroban_sdk::xdr::ContractEventBody::V0(ref v0) = e.body;
+        if v0.topics.is_empty() {
+            return false;
+        }
+        <Symbol as TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(&env, &v0.topics[0])
+            .map(|t| t == symbol_short!("deployed"))
+            .unwrap_or(false)
+    });
+    assert!(deployed_event.is_some());
+    let soroban_sdk::xdr::ContractEventBody::V0(ref v0) = deployed_event.unwrap().body;
+    let val = <soroban_sdk::Val as TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(
+        &env, &v0.data,
+    )
+    .unwrap();
+    let data: crate::events::ContractDeployedEvent = soroban_sdk::FromVal::from_val(&env, &val);
+    assert_eq!(data.admin, admin);
+    assert_eq!(data.version, String::from_str(&env, VERSION));
+}
+
+#[test]
 fn test_snapshot_submitted_event() {
     let env = Env::default();
     env.mock_all_auths();
