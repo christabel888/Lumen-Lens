@@ -1,6 +1,7 @@
 use crate::models::{AnchorMetrics, AnchorStatus};
 
 pub mod corridor;
+pub mod stat_deltas;
 
 // ── Data Integrity Validation ──────────────────────────────────────────────
 
