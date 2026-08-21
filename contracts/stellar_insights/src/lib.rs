@@ -113,6 +113,9 @@ impl StellarInsightsContract {
             .instance()
             .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
 
+        // Fires exactly once per contract lifetime, immediately after the admin
+        // is durably persisted. Consumed by the New Deployments panel to detect
+        // a fresh `stellar_insights` deployment.
         emit_contract_initialized(&env, admin);
 
         Ok(())
@@ -354,6 +357,9 @@ impl StellarInsightsContract {
         }
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         bump_instance(&env);
+        // Fires once per successful `set_admin` call, after the new admin is
+        // durably persisted. `old_admin` is always the previously stored
+        // admin (never empty, since `initialize` requires setting one first).
         emit_admin_transferred(&env, old_admin, new_admin);
         Ok(())
     }
@@ -400,6 +406,9 @@ impl StellarInsightsContract {
         env.storage().instance().set(&DataKey::Paused, &true);
         bump_instance(&env);
 
+        // Fires once per successful `pause` call (i.e. only when auth and the
+        // admin check both pass). Drives the Soroban Dashboard status panel's
+        // "paused" indicator for this contract.
         emit_contract_paused(&env, caller);
 
         Ok(())
@@ -432,6 +441,8 @@ impl StellarInsightsContract {
         env.storage().instance().set(&DataKey::Paused, &false);
         bump_instance(&env);
 
+        // Fires once per successful `unpause` call. Drives the Soroban
+        // Dashboard status panel back to "active" for this contract.
         emit_contract_unpaused(&env, caller);
 
         Ok(())
