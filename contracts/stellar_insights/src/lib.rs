@@ -1,10 +1,34 @@
+//! Core `stellar_insights` contract: records the analytics-snapshot hash
+//! chain that other services verify off-chain data against.
+//!
+//! # Public API
+//! - `initialize` — one-time setup, sets the admin
+//! - `submit_snapshot` / `get_snapshot` / `latest_snapshot` — the hash chain
+//! - `pause` / `unpause` / `is_paused` — emergency stop for submissions
+//! - `set_admin` / `get_admin` — admin rotation
+//! - `upgrade` — Wasm upgrade (admin-only, blocked while paused)
+//! - `get_metadata` / `get_contract_info` — public metadata for tooling
+//!
+//! # Events
+//! See `docs/events/stellar_insights.md` for the full schema. In short:
+//! `ContractDeployedEvent` and an `init` event fire once on `initialize`;
+//! `SnapshotSubmitted` fires on every successful `submit_snapshot`; `paused`
+//! / `unpaused` / `AdminTransferredEvent` fire on their respective calls.
+//!
+//! # State
+//! Admin, pause flag, package version, and latest epoch live in instance
+//! storage; the epoch -> `Snapshot` map lives in persistent storage under
+//! `DataKey::Snapshots`.
 #![no_std]
 
 mod errors;
 mod events;
 
 use errors::Error;
-use events::{emit_admin_transferred, emit_contract_initialized, emit_contract_paused, emit_contract_unpaused, emit_snapshot_submitted};
+use events::{
+    emit_admin_transferred, emit_contract_deployed, emit_contract_initialized,
+    emit_contract_paused, emit_contract_unpaused, emit_snapshot_submitted,
+};
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -113,7 +137,8 @@ impl StellarInsightsContract {
             .instance()
             .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
 
-        emit_contract_initialized(&env, admin);
+        emit_contract_initialized(&env, admin.clone());
+        emit_contract_deployed(&env, admin, String::from_str(&env, VERSION));
 
         Ok(())
     }
