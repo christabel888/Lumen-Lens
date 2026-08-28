@@ -1,6 +1,6 @@
 # `analytics` — Event Reference
 
-`analytics/src/lib.rs` is the most event-heavy contract in the workspace (24
+`analytics/src/lib.rs` is the most event-heavy contract in the workspace (25
 `env.events().publish(...)` call sites). This table summarizes each one; see
 the inline `//` comments directly above each `publish` call in
 `analytics/src/lib.rs` for the authoritative, code-adjacent description.
@@ -14,8 +14,9 @@ the inline `//` comments directly above each `publish` call in
 | `("batch", caller)` | Every `batch_submit_snapshots` call, after all per-item events | `u32` (batch size) | Snapshot feed batch summary |
 | `("cleanup", admin)` | Every `cleanup_expired_snapshots` call | `u32` (count removed) | Maintenance/ops visibility |
 | `("admin", new_admin)` | Every `set_admin` (both `AdminTransferEvent` and `AdminChangedEvent` fire) and `set_admin_by_governance` (`AdminChangedEvent`) | `AdminTransferEvent`, `AdminChangedEvent` | Admin/wallet activity feed |
-| `("pause", caller)` | `pause`, and `set_paused_by_governance(true)` | `PauseEvent` | Status panel |
-| `("unpause", caller)` | `unpause`, and `set_paused_by_governance(false)` | `UnpauseEvent` | Status panel |
+| `("pause", caller)` | `pause`, and `set_paused_by_governance(true)` | `PauseEvent` | Legacy pause-only feed |
+| `("unpause", caller)` | `unpause`, and `set_paused_by_governance(false)` | `UnpauseEvent` | Legacy unpause-only feed |
+| `("status", caller)` | Every `pause` / `unpause` / `set_paused_by_governance` call, published alongside the topic above | `ContractStatusEvent { paused, changed_by, reason, timestamp, ledger_sequence }` | **Status panel** — single topic to subscribe to regardless of pause direction or caller path (admin vs. governance) |
 | `("emergency", admin)` | `emergency_withdraw` (admin-only, only while paused) | `(token, amount, recipient)` untyped tuple | Ops/security alerting |
 | `("upgrade",)` | Successful Wasm upgrade | `(admin, new_wasm_hash)` untyped tuple | New Deployments panel |
 | `("gov", governance)` | `set_governance` | `GovernanceChangedEvent` | Governance insights |
@@ -24,6 +25,18 @@ the inline `//` comments directly above each `publish` call in
 | `("tl_cncl", admin)` | `cancel_timelock_action` | `TimelockActionCancelledEvent` | Timelock/governance insights |
 | `("prune", caller)` | `prune_old_snapshots` | `SnapshotsPrunedEvent` | Maintenance/ops visibility |
 | `("multisig", "init")` | `initialize_multisig` | `MultiSigInitializedEvent` | Wallet dashboard |
+
+## Why `ContractStatusEvent` was added
+
+Before this change, the dashboard's status panel would have needed to
+subscribe to both the `"pause"` and `"unpause"` topics and merge them client
+side to know the contract's current paused state — and it would have missed
+governance-triggered changes unless it also accounted for
+`set_paused_by_governance` publishing the same two topics. `ContractStatusEvent`
+is published on a single `"status"` topic on every state change (admin- or
+governance-triggered), carrying the resulting `paused: bool` directly. It is
+additive: `PauseEvent`/`UnpauseEvent` are still published unchanged for any
+existing consumers.
 
 Notes:
 - Several payloads are untyped tuples rather than named `#[contracttype]`
