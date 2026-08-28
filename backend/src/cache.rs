@@ -475,6 +475,15 @@ pub mod keys {
         "analytics:dashboard".to_string()
     }
 
+    /// Cache key for `/api/v1/stats/summary` (issue #1/#4). No request
+    /// parameters vary this endpoint's response today, so a single static
+    /// key is correct -- if a per-network or per-user dimension is ever
+    /// added, this key must be extended to include it.
+    #[must_use]
+    pub fn stats_summary() -> String {
+        "stats:summary".to_string()
+    }
+
     /// Pattern for invalidating all anchor-related caches
     #[must_use]
     pub fn anchor_pattern() -> String {
