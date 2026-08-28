@@ -115,7 +115,7 @@ impl JobScheduler {
     }
 
     pub fn start(
-        _db: Arc<Database>,
+        db: Arc<Database>,
         cache: Arc<CacheManager>,
         _rpc: Arc<StellarRpcClient>,
         ingestion: Arc<DataIngestionService>,
@@ -166,6 +166,24 @@ impl JobScheduler {
             let cache = Arc::clone(&cache_clone);
             Box::pin(async move {
                 cache.cleanup_expired()?;
+                Ok(())
+            })
+        });
+
+        // Daily active accounts job (issue #2)
+        let config = JobConfig::from_env("daa", 900);
+        let daa_pool = db.pool().clone();
+        scheduler.add_job(config, move || {
+            let pool = daa_pool.clone();
+            Box::pin(async move {
+                let job = crate::jobs::daily_active_accounts::DailyActiveAccountsJob::new(
+                    pool,
+                    crate::jobs::daily_active_accounts::DaaJobConfig {
+                        enabled: true,
+                        interval_seconds: 900,
+                    },
+                );
+                job.run_once().await?;
                 Ok(())
             })
         });

@@ -1,10 +1,12 @@
 pub mod asset_revalidation;
 pub mod backfill;
 pub mod contract_event_listener;
+pub mod daily_active_accounts;
 pub mod scheduler;
 pub mod trace_aware_executor;
 
 pub use asset_revalidation::{AssetRevalidationJob, RevalidationConfig, RevalidationStats};
+pub use daily_active_accounts::{DaaJobConfig, DailyActiveAccountsJob};
 pub use backfill::{
     BackfillJob, BackfillRequest, BackfillState, BackfillStateRef, BackfillStatus, LedgerGap,
 };

@@ -90,6 +90,10 @@ pub fn routes(
             "/corridors/:corridor_key",
             get(corridors::get_corridor_detail),
         )
+        .route(
+            "/stats/summary",
+            get(crate::api::analytics_dashboard::get_stats_summary),
+        )
         .with_state(cached_state);
 
     // Captured before `app_state` is moved into `protected_routes` below.

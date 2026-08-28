@@ -494,7 +494,7 @@ pub mod keys {
     }
 
     /// Cache key for `/api/v1/stats/summary` (issue #1/#4). No request
-    /// parameter varies this endpoint's response today, so a single static
+    /// parameters vary this endpoint's response today, so a single static
     /// key is correct -- if a per-network or per-user dimension is ever
     /// added, this key must be extended to include it.
     #[must_use]
