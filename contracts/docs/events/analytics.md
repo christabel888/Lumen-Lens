@@ -1,10 +1,9 @@
 # `analytics` — Event Reference
 
-`analytics/src/lib.rs` is the most event-heavy contract in the workspace
-(25 `env.events().publish(...)` call sites as of this change). This table
-summarizes each one; see the inline `//` comments directly above each
-`publish` call in `analytics/src/lib.rs` for the authoritative,
-code-adjacent description.
+`analytics/src/lib.rs` is the most event-heavy contract in the workspace (25
+`env.events().publish(...)` call sites). This table summarizes each one; see
+the inline `//` comments directly above each `publish` call in
+`analytics/src/lib.rs` for the authoritative, code-adjacent description.
 
 | Topic | Trigger | Payload | Consumer |
 |---|---|---|---|
@@ -46,6 +45,6 @@ Notes:
   inline comment at each call site.
 - `submit_snapshot_with_ttl`'s event always reports `previous_epoch: 0`
   rather than the actual prior epoch — a known inconsistency versus
-  `submit_snapshot`'s event.
+  `submit_snapshot`'s event, left as-is per this issue's docs-only scope.
 
 See `docs/EVENTS.md` for the cross-crate summary.

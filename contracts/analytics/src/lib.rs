@@ -79,6 +79,9 @@ fn emit_error_event(
         ContractError::EpochMonotonicityViolated => "Epoch monotonicity violated",
         ContractError::SnapshotImmutabilityViolated => "Snapshot immutability violated",
     };
+    // Generic operational-error event, published from validation/authorization failure
+    // paths throughout this contract (see call sites of `emit_error_event`). Not part of
+    // the happy-path event set the dashboard indexes; intended for on-chain error/alerting.
     env.events().publish(
         (symbol_short!("error"), caller.clone()),
         ErrorEvent {
@@ -670,6 +673,8 @@ impl AnalyticsContract {
             .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND);
 
         // Emit initialization event
+        // Fires once, on the first successful `initialize` call. Legacy shape: the topic
+        // carries no payload beyond the admin address.
         env.events().publish(
             (symbol_short!("init"), symbol_short!("admin")),
             admin,
@@ -688,6 +693,8 @@ impl AnalyticsContract {
         let old_config = get_config(&env);
         env.storage().instance().set(&DataKey::Config, &config);
 
+        // Fires on every successful `update_config` call (caller verified as admin).
+        // `old_config`/`new_config` are both included so a listener can diff without a prior read.
         env.events().publish(
             (symbol_short!("cfg_upd"), admin.clone()),
             ConfigUpdatedEvent {
@@ -762,6 +769,9 @@ impl AnalyticsContract {
 
         write_snapshot(&env, epoch, &metadata);
 
+        // Fires once per successful `submit_snapshot` call, after the snapshot is durably
+        // written. `previous_epoch` is the latest epoch prior to this call, so a listener can
+        // detect gaps in the epoch sequence.
         env.events().publish(
             (symbol_short!("snapshot"), caller),
             SnapshotSubmittedEvent {
@@ -867,6 +877,8 @@ impl AnalyticsContract {
                 LEDGERS_TO_EXTEND,
             );
 
+            // Fires once per snapshot within a batch, in submission order, mirroring the
+            // single-submit event shape so downstream consumers don't need special-case handling.
             env.events().publish(
                 (symbol_short!("snapshot"), caller.clone()),
                 SnapshotSubmittedEvent {
@@ -888,6 +900,8 @@ impl AnalyticsContract {
         bump_instance(&env);
 
         // Emit batch event
+        // Fires once per `batch_submit_snapshots` call, after every per-item event above has
+        // been published. Payload is just the batch size; per-item detail is in those events.
         env.events().publish(
             (symbol_short!("batch"), caller),
             snapshots.len(),
@@ -935,6 +949,8 @@ impl AnalyticsContract {
             ledgers_to_live,
         );
 
+        // Fires once per successful `submit_snapshot_with_ttl` call. Note `previous_epoch` is
+        // hardcoded to 0 here rather than the actual prior epoch -- a known gap vs `submit_snapshot`.
         env.events().publish(
             (symbol_short!("snapshot"), caller.clone()),
             SnapshotSubmittedEvent {
@@ -995,6 +1011,7 @@ impl AnalyticsContract {
             env.storage().persistent().remove(&DataKey::Snapshot(epoch));
         }
 
+        // Fires once per `cleanup_expired_snapshots` call, even when `cleaned == 0`.
         env.events().publish(
             (symbol_short!("cleanup"), admin),
             cleaned,
@@ -1231,6 +1248,8 @@ impl AnalyticsContract {
         bump_instance(&env);
 
         // ✅ EMIT DETAILED EVENT for audit trail
+        // Fires once per successful `set_admin` call, immediately before the companion
+        // `AdminChangedEvent` below. Kept for backwards compatibility with older indexers.
         env.events().publish(
             (symbol_short!("admin"), new_admin.clone()),
             AdminTransferEvent {
@@ -1242,6 +1261,9 @@ impl AnalyticsContract {
             },
         );
 
+        // Fires immediately after `AdminTransferEvent` on every successful `set_admin` call.
+        // Carries the same data in the shape used consistently elsewhere in this contract
+        // (see `set_admin_by_governance`).
         env.events().publish(
             (symbol_short!("admin"), new_admin.clone()),
             AdminChangedEvent {
@@ -1278,6 +1300,8 @@ impl AnalyticsContract {
         env.storage().instance().set(&DataKey::Paused, &true);
         bump_instance(&env);
 
+        // Fires once per successful `pause` call (admin-authorized). Drives the dashboard
+        // status panel's paused indicator; `reason` is caller-supplied and may be empty.
         env.events().publish(
             (symbol_short!("pause"), caller.clone()),
             PauseEvent {
@@ -1325,6 +1349,8 @@ impl AnalyticsContract {
         env.storage().instance().set(&DataKey::Paused, &false);
         bump_instance(&env);
 
+        // Fires once per successful `unpause` call (admin-authorized). Drives the dashboard
+        // status panel back to active.
         env.events().publish(
             (symbol_short!("unpause"), caller.clone()),
             UnpauseEvent {
@@ -1386,6 +1412,8 @@ impl AnalyticsContract {
         token_client.transfer(&env.current_contract_address(), &recipient, &amount);
         
         // Emit event
+        // Fires once per successful `emergency_withdraw` call (admin-only, only callable while
+        // paused). Untyped tuple payload, in order: token, amount, recipient.
         env.events().publish(
             (symbol_short!("emergency"), admin),
             (token, amount, recipient),
@@ -1421,6 +1449,7 @@ impl AnalyticsContract {
         bump_instance(&env);
 
         // Emit event
+        // Fires once per successful Wasm upgrade. Untyped tuple payload: (admin, new_wasm_hash).
         env.events().publish(
             (symbol_short!("upgrade"),),
             (admin, new_wasm_hash),
@@ -1444,6 +1473,8 @@ impl AnalyticsContract {
             .set(&DataKey::Governance, &governance);
         bump_instance(&env);
 
+        // Fires once per successful `set_governance` call. `old_governance` is `None` the
+        // first time governance is configured.
         env.events().publish(
             (symbol_short!("gov"), governance.clone()),
             GovernanceChangedEvent {
@@ -1486,6 +1517,8 @@ impl AnalyticsContract {
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         bump_instance(&env);
 
+        // Fires once per successful `set_admin_by_governance` call (caller must be the
+        // configured governance address, not the admin itself).
         env.events().publish(
             (symbol_short!("admin"), new_admin.clone()),
             AdminChangedEvent {
@@ -1520,6 +1553,9 @@ impl AnalyticsContract {
         let timestamp = env.ledger().timestamp();
         let ledger_sequence = env.ledger().sequence();
         if paused {
+            // Fires when governance pauses the contract via `set_paused_by_governance(true)`.
+            // Same topic/shape as the admin-triggered `pause` event above, so listeners don't need
+            // to distinguish the caller path.
             let reason = String::from_str(&env, "Paused by governance");
             env.events().publish(
                 (symbol_short!("pause"), caller.clone()),
@@ -1541,6 +1577,8 @@ impl AnalyticsContract {
                 },
             );
         } else {
+            // Fires when governance unpauses via `set_paused_by_governance(false)`. Same
+            // topic/shape as the admin-triggered `unpause` event above.
             let reason = String::from_str(&env, "Unpaused by governance");
             env.events().publish(
                 (symbol_short!("unpause"), caller.clone()),
@@ -1603,6 +1641,9 @@ impl AnalyticsContract {
             .set(&DataKey::TimelockAction(action_id), &action);
 
         // Emit event
+        // Fires once per successful `propose_admin_change` call. Untyped tuple payload:
+        // (action_id, new_admin, executable_at) -- the timelock delay is already baked into
+        // `executable_at`.
         env.events().publish(
             (symbol_short!("propose"), proposer),
             (action_id, new_admin, action.executable_at),
@@ -1650,6 +1691,8 @@ impl AnalyticsContract {
             .set(&DataKey::TimelockAction(action_id), &action);
 
         // Emit structured event
+        // Fires once a queued timelock action is executed, after the timelock delay has
+        // elapsed and the action had not already been executed.
         env.events().publish(
             (symbol_short!("tl_exec"), executor.clone()),
             TimelockActionExecutedEvent {
@@ -1682,6 +1725,9 @@ impl AnalyticsContract {
             .remove(&DataKey::TimelockAction(action_id));
 
         // Emit structured event
+        // Fires once per successful `cancel_timelock_action` call (admin-only). The action is
+        // removed from storage in the same call, so this event is the only on-chain record
+        // of the cancellation.
         env.events().publish(
             (symbol_short!("tl_cncl"), admin.clone()),
             TimelockActionCancelledEvent {
@@ -1734,6 +1780,7 @@ impl AnalyticsContract {
             env.storage().persistent().remove(&DataKey::Snapshot(epoch));
         }
 
+        // Fires once per `prune_old_snapshots` call, even when `removed_count == 0`.
         env.events().publish(
             (symbol_short!("prune"), caller.clone()),
             SnapshotsPrunedEvent {
@@ -1786,6 +1833,7 @@ impl AnalyticsContract {
             .instance()
             .set(&DataKey::MultiSigConfig, &config);
 
+        // Fires once, when multi-sig config is first set via `initialize_multisig`.
         env.events().publish(
             (symbol_short!("multisig"), symbol_short!("init")),
             MultiSigInitializedEvent {
@@ -1941,6 +1989,9 @@ impl AnalyticsContract {
             .set(&DataKey::CompactSnapshot(epoch), &compact);
         env.storage().instance().set(&DataKey::LatestEpoch, &epoch);
 
+        // Fires once per successful `submit_snapshot_compact` call. Untyped tuple payload:
+        // (epoch, hash, timestamp) -- the submitter is looked up via the address registry
+        // rather than included directly, to keep the event small.
         env.events().publish(
             (symbol_short!("snapshot"), caller),
             (epoch, compact.hash, timestamp),
