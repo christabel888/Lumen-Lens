@@ -1,3 +1,36 @@
+//! `analytics` contract: records the epoch -> snapshot-hash chain (with
+//! optional TTL/expiry, batching, and a compact address-registry-backed
+//! storage form), plus admin/governance/multi-sig/timelock scaffolding
+//! shared across the workspace.
+//!
+//! # Public API
+//! - `initialize` / `update_config` / `get_config` — setup and tuning
+//! - `submit_snapshot` / `batch_submit_snapshots` / `submit_snapshot_with_ttl`
+//!   / `submit_snapshot_compact` — the snapshot hash chain
+//! - `get_snapshot*`, `compare_snapshots`, `verify_snapshot*`,
+//!   `get_statistics` — read/verification paths
+//! - `pause` / `unpause` / `is_paused` / `get_pause_info` — emergency stop
+//! - `set_admin` / `set_governance` / `set_admin_by_governance` /
+//!   `set_paused_by_governance` — admin and governance control
+//! - `propose_admin_change` / `execute_timelock_action` /
+//!   `cancel_timelock_action` — 48h-timelocked admin rotation
+//! - `initialize_multisig` / `propose_action` / `sign_action` — multi-sig scaffolding
+//!
+//! # Events
+//! This is the most event-heavy crate in the workspace (24
+//! `events().publish` call sites as of this writing). See
+//! `docs/events/analytics.md` for the full table; every call site also has
+//! an inline `//` comment describing its trigger condition and payload.
+//! Notably, `pause`/`unpause` (and their governance-triggered counterparts)
+//! publish both their existing dedicated event and a unified
+//! `ContractStatusEvent` on the `"status"` topic, so the dashboard status
+//! panel can subscribe to one stream regardless of caller path.
+//!
+//! # State
+//! Admin, pause flag/info, config, governance address, and epoch counters
+//! live in instance storage; per-epoch snapshots, timelock actions, pending
+//! multi-sig actions, and the address registry live in persistent storage;
+//! rate-limit counters live in temporary storage.
 #![no_std]
 extern crate std;
 
@@ -128,6 +161,24 @@ pub struct PauseEvent {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UnpauseEvent {
     pub unpaused_by: Address,
+    pub reason: String,
+    pub timestamp: u64,
+    pub ledger_sequence: u32,
+}
+
+/// Unified pause-state-change event, published alongside `PauseEvent`/`UnpauseEvent`.
+///
+/// `PauseEvent` and `UnpauseEvent` are on separate topics (`"pause"` / `"unpause"`),
+/// which means a status panel that wants a single "is this contract paused right
+/// now" feed has to subscribe to and merge both. This event carries the resulting
+/// `paused` boolean directly on a single topic (`"status"`), so the dashboard
+/// status panel can consume one stream regardless of which direction the state
+/// changed, and regardless of whether the change was admin- or governance-triggered.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractStatusEvent {
+    pub paused: bool,
+    pub changed_by: Address,
     pub reason: String,
     pub timestamp: u64,
     pub ledger_sequence: u32,
@@ -1230,7 +1281,19 @@ impl AnalyticsContract {
         env.events().publish(
             (symbol_short!("pause"), caller.clone()),
             PauseEvent {
-                paused_by: caller,
+                paused_by: caller.clone(),
+                reason: reason.clone(),
+                timestamp,
+                ledger_sequence: env.ledger().sequence(),
+            },
+        );
+        // Also publish the unified status event the dashboard status panel
+        // subscribes to (see `ContractStatusEvent` doc comment above).
+        env.events().publish(
+            (symbol_short!("status"), caller.clone()),
+            ContractStatusEvent {
+                paused: true,
+                changed_by: caller,
                 reason,
                 timestamp,
                 ledger_sequence: env.ledger().sequence(),
@@ -1265,7 +1328,19 @@ impl AnalyticsContract {
         env.events().publish(
             (symbol_short!("unpause"), caller.clone()),
             UnpauseEvent {
-                unpaused_by: caller,
+                unpaused_by: caller.clone(),
+                reason: reason.clone(),
+                timestamp,
+                ledger_sequence: env.ledger().sequence(),
+            },
+        );
+        // Also publish the unified status event the dashboard status panel
+        // subscribes to (see `ContractStatusEvent` doc comment above).
+        env.events().publish(
+            (symbol_short!("status"), caller.clone()),
+            ContractStatusEvent {
+                paused: false,
+                changed_by: caller,
                 reason,
                 timestamp,
                 ledger_sequence: env.ledger().sequence(),
@@ -1442,24 +1517,48 @@ impl AnalyticsContract {
         env.storage().instance().set(&DataKey::Paused, &paused);
         bump_instance(&env);
 
+        let timestamp = env.ledger().timestamp();
+        let ledger_sequence = env.ledger().sequence();
         if paused {
+            let reason = String::from_str(&env, "Paused by governance");
             env.events().publish(
                 (symbol_short!("pause"), caller.clone()),
                 PauseEvent {
-                    paused_by: caller,
-                    reason: String::from_str(&env, "Paused by governance"),
-                    timestamp: env.ledger().timestamp(),
-                    ledger_sequence: env.ledger().sequence(),
+                    paused_by: caller.clone(),
+                    reason: reason.clone(),
+                    timestamp,
+                    ledger_sequence,
+                },
+            );
+            env.events().publish(
+                (symbol_short!("status"), caller.clone()),
+                ContractStatusEvent {
+                    paused: true,
+                    changed_by: caller,
+                    reason,
+                    timestamp,
+                    ledger_sequence,
                 },
             );
         } else {
+            let reason = String::from_str(&env, "Unpaused by governance");
             env.events().publish(
                 (symbol_short!("unpause"), caller.clone()),
                 UnpauseEvent {
-                    unpaused_by: caller,
-                    reason: String::from_str(&env, "Unpaused by governance"),
-                    timestamp: env.ledger().timestamp(),
-                    ledger_sequence: env.ledger().sequence(),
+                    unpaused_by: caller.clone(),
+                    reason: reason.clone(),
+                    timestamp,
+                    ledger_sequence,
+                },
+            );
+            env.events().publish(
+                (symbol_short!("status"), caller.clone()),
+                ContractStatusEvent {
+                    paused: false,
+                    changed_by: caller,
+                    reason,
+                    timestamp,
+                    ledger_sequence,
                 },
             );
         }
