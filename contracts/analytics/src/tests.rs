@@ -1129,6 +1129,55 @@ fn test_pause_and_unpause() {
 }
 
 #[test]
+fn test_pause_and_unpause_emit_unified_status_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, AnalyticsContract);
+    let client = AnalyticsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin, &None);
+    client.pause(&admin, &soroban_sdk::String::from_str(&env, "maintenance"));
+
+    let events_after_pause = env.events().all();
+    let status_event = events_after_pause.events().iter().find(|e| {
+        let soroban_sdk::xdr::ContractEventBody::V0(ref v0) = e.body;
+        if v0.topics.is_empty() {
+            return false;
+        }
+        <Symbol as TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(&env, &v0.topics[0])
+            .map(|t| t == symbol_short!("status"))
+            .unwrap_or(false)
+    });
+    assert!(status_event.is_some(), "expected a 'status' event on pause");
+    let soroban_sdk::xdr::ContractEventBody::V0(ref v0) = status_event.unwrap().body;
+    let val = <Val as TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(&env, &v0.data)
+        .expect("status event data");
+    let data: ContractStatusEvent = FromVal::from_val(&env, &val);
+    assert!(data.paused);
+    assert_eq!(data.changed_by, admin);
+
+    client.unpause(&admin, &soroban_sdk::String::from_str(&env, "done"));
+    let events_after_unpause = env.events().all();
+    let unpause_status_event = events_after_unpause.events().iter().rev().find(|e| {
+        let soroban_sdk::xdr::ContractEventBody::V0(ref v0) = e.body;
+        if v0.topics.is_empty() {
+            return false;
+        }
+        <Symbol as TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(&env, &v0.topics[0])
+            .map(|t| t == symbol_short!("status"))
+            .unwrap_or(false)
+    });
+    assert!(unpause_status_event.is_some(), "expected a 'status' event on unpause");
+    let soroban_sdk::xdr::ContractEventBody::V0(ref v0) = unpause_status_event.unwrap().body;
+    let val = <Val as TryFromVal<Env, soroban_sdk::xdr::ScVal>>::try_from_val(&env, &v0.data)
+        .expect("status event data");
+    let data: ContractStatusEvent = FromVal::from_val(&env, &val);
+    assert!(!data.paused);
+}
+
+#[test]
 fn test_submit_while_paused_fails() {
     let env = Env::default();
     env.mock_all_auths();
