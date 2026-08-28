@@ -132,6 +132,35 @@ pub fn emit_contract_initialized(env: &Env, admin: Address) {
         .publish((symbol_short!("init"), CONTRACT_LIFECYCLE), admin);
 }
 
+/// Event emitted once per contract deployment, alongside `emit_contract_initialized`.
+///
+/// Unlike the plain `init` event (which only carries the admin address), this
+/// carries the deployed package version so the Soroban Dashboard's New
+/// Deployments panel can distinguish a fresh deploy from a governance-approved
+/// upgrade without having to separately query `get_version`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractDeployedEvent {
+    pub admin: Address,
+    pub version: soroban_sdk::String,
+    pub timestamp: u64,
+    pub ledger_sequence: u32,
+}
+
+/// Emit the deployment event. Fires exactly once, at the end of a successful
+/// `initialize` call (never on re-initialization, since `initialize` rejects
+/// that before any state is written).
+pub fn emit_contract_deployed(env: &Env, admin: Address, version: soroban_sdk::String) {
+    let event = ContractDeployedEvent {
+        admin,
+        version,
+        timestamp: env.ledger().timestamp(),
+        ledger_sequence: env.ledger().sequence(),
+    };
+    env.events()
+        .publish((symbol_short!("deployed"), CONTRACT_LIFECYCLE), event);
+}
+
 /// Emit an event when the contract is paused.
 pub fn emit_contract_paused(env: &Env, caller: Address) {
     env.events()

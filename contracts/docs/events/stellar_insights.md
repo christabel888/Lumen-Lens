@@ -6,12 +6,21 @@ two are `analytics` and `access-control`).
 
 | Event | Topic(s) | Trigger | Consumer |
 |---|---|---|---|
+| contract-initialized | `(symbol_short!("init"), CONTRACT_LIFECYCLE)`, data: `admin: Address` | Once, on the first successful `initialize` call | New Deployments panel |
+| `ContractDeployedEvent` | `(symbol_short!("deployed"), CONTRACT_LIFECYCLE)` | Once, immediately after the `init` event on the first successful `initialize` call | New Deployments panel — carries `version` so deploys don't need a follow-up `get_version` call |
 | `SnapshotSubmitted` | `(SNAPSHOT_SUBMITTED, SNAPSHOT_LIFECYCLE)` | Every successful `submit_snapshot` call (after auth, admin, and epoch-monotonicity checks all pass) | Soroban Dashboard snapshot feed / analytics indexer |
 | `AnalyticsSnapshotSubmitted` (legacy) | `(SNAPSHOT_SUBMITTED,)` | Not currently called from `lib.rs` — kept for backwards compatibility with older indexers that only registered the single-topic form | none currently; do not build new integrations against this shape |
-| contract-initialized | `(symbol_short!("init"), CONTRACT_LIFECYCLE)`, data: `admin: Address` | Once, on the first successful `initialize` call | New Deployments panel |
 | contract-paused | `(symbol_short!("paused"), CONTRACT_LIFECYCLE)`, data: `caller: Address` | Every successful `pause` call | Soroban Dashboard status panel |
 | contract-unpaused | `(symbol_short!("unpaused"), CONTRACT_LIFECYCLE)`, data: `caller: Address` | Every successful `unpause` call | Soroban Dashboard status panel |
 | `AdminTransferredEvent` | `(symbol_short!("admin"), CONTRACT_LIFECYCLE)` | Every successful `set_admin` call | Wallet/admin activity feed |
+
+## `ContractDeployedEvent` fields
+
+| Field | Meaning |
+|---|---|
+| `admin` | The admin address the contract was initialized with |
+| `version` | `CARGO_PKG_VERSION` at initialization time, same value `get_version` returns |
+| `timestamp` / `ledger_sequence` | Ledger time/sequence when the deployment was recorded |
 
 ## `SnapshotSubmitted` fields
 

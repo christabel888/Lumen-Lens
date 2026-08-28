@@ -59,6 +59,20 @@ pub enum ParameterAction {
     SetPaused(bool),
 }
 
+/// One governance proposal. Stored in persistent storage under
+/// `DataKey::Proposal(id)`, `id` assigned sequentially from
+/// `DataKey::ProposalCount` (instance storage) at creation time via either
+/// `create_proposal` (upgrade proposal) or `create_parameter_proposal`
+/// (parameter-update proposal; the companion `DataKey::ParameterAction(id)`
+/// entry distinguishes it — `new_wasm_hash` is a zero hash for these).
+///
+/// Lifecycle: created in `ProposalStatus::Active` -> `finalize` (callable by
+/// anyone once `voting_ends_at` has passed) sets it to `Passed` or `Failed`
+/// based on quorum and vote count -> `mark_executed` (admin-only, only from
+/// `Passed`) sets it to `Executed` and invokes the target contract. Every
+/// transition emits a matching event (see `docs/events/governance.md`), so
+/// this struct is the source of truth an indexer can always re-fetch via
+/// `get_proposal(id)`, not the only way to observe a change.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Proposal {
@@ -73,6 +87,14 @@ pub struct Proposal {
     pub voting_ends_at: u64,
 }
 
+/// Running vote tally for one proposal. Stored in persistent storage under
+/// `DataKey::VoteTally(proposal_id)`, created alongside the `Proposal` (all
+/// zeros) and incremented on every `vote` call. TTL is shortened to ~7 days
+/// once `finalize` runs (the tally is no longer needed for active voting),
+/// and the entry can be removed entirely via `cleanup_proposal` once the
+/// proposal is no longer `Active`. `total_voters` is a plain count of
+/// distinct addresses that voted (bounded by `votes_for + votes_against +
+/// votes_abstain`, which always equals it since each address votes exactly once).
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VoteTally {
