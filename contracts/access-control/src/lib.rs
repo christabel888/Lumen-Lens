@@ -1,3 +1,24 @@
+//! `access-control` contract: role-based access control shared by other
+//! contracts in this workspace (`SuperAdmin` > `Admin` > `Operator` >
+//! `Viewer`, with higher roles inheriting lower roles' permissions).
+//!
+//! # Public API
+//! - `initialize` — grants `SuperAdmin` to the deployer
+//! - `grant_role` / `revoke_role` / `has_role` — role management (`Admin`+ only)
+//! - `grant_permission` / `check_permission` — per-function permission grants
+//! - `get_version` / `get_metadata` / `get_contract_info` — introspection
+//! - `upgrade` — Wasm upgrade (`SuperAdmin`-only)
+//!
+//! # Events
+//! See `docs/events/access-control.md` for the full schema:
+//! `InitializedEvent` fires once on `initialize`; `RoleGrantedEvent` /
+//! `RoleRevokedEvent` / `PermissionGrantedEvent` fire on their respective
+//! mutations; an untyped tuple event fires on `upgrade`.
+//!
+//! # State
+//! `DataKey::Roles(Address)` -> `Vec<Role>` and `DataKey::Permissions(Role)`
+//! -> `Vec<Symbol>` live in persistent storage; `DataKey::Version` lives in
+//! instance storage.
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
@@ -92,12 +113,18 @@ pub struct PermissionGrantedEvent {
 }
 
 /// Event emitted when the contract is initialized.
+///
+/// `version` carries the deployed package version (added alongside `admin`,
+/// `timestamp`, `ledger_sequence`) so the Soroban Dashboard's New
+/// Deployments panel can record which build was deployed without a
+/// follow-up `get_version` call.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InitializedEvent {
     pub admin: Address,
     pub timestamp: u64,
     pub ledger_sequence: u32,
+    pub version: String,
 }
 
 /// Extended contract metadata for public disclosure
@@ -155,6 +182,7 @@ impl AccessControlContract {
                 admin,
                 timestamp: env.ledger().timestamp(),
                 ledger_sequence: env.ledger().sequence(),
+                version: String::from_str(&env, VERSION),
             },
         );
     }
@@ -1112,6 +1140,7 @@ mod test {
                     .unwrap();
                 let data: InitializedEvent = soroban_sdk::FromVal::from_val(&env, &val);
                 assert_eq!(data.admin, admin);
+                assert_eq!(data.version, String::from_str(&env, VERSION));
             }
         }
     }
