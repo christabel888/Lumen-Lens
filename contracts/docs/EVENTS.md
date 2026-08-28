@@ -11,7 +11,7 @@ detail lives in `docs/events/<crate>.md`; this file is the map.
 | `stellar_insights` | Yes | Soroban Dashboard (snapshot feed, New Deployments panel, status panel) |
 | `analytics` | Yes | Soroban Dashboard (snapshot feed, status panel, admin/governance audit trail) |
 | `access-control` | Yes | New Deployments panel, audit trail |
-| `escrow` | Yes | Top Contracts ranking, escrow activity feed |
+| `escrow` | Yes | Top Contracts ranking, escrow activity feed, status panel |
 | `governance` | Yes | Governance insights, New Deployments panel, audit trail |
 | `governance-voting` | Storage-only today | Turnout insights (planned) |
 | `multi-sig-wallet` | Storage-only today | Wallet activity feed (planned) |
