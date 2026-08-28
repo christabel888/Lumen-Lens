@@ -34,6 +34,12 @@ pub struct CacheConfig {
     pub corridor_metrics_ttl: usize, // 5 minutes
     pub anchor_data_ttl: usize,      // 10 minutes
     pub dashboard_stats_ttl: usize,  // 1 minute
+    /// TTL for `/api/v1/stats/summary` (issue #4). Defaults to
+    /// `dashboard_stats_ttl` -- the homepage stat tiles don't need a
+    /// different freshness window than the existing dashboard by default,
+    /// but `CACHE_STATS_SUMMARY_TTL` lets it be tuned independently without
+    /// affecting `/analytics/dashboard`'s TTL.
+    pub stats_summary_ttl: usize,
 }
 
 impl CacheConfig {
@@ -43,6 +49,7 @@ impl CacheConfig {
             "corridor" => self.corridor_metrics_ttl,
             "anchor" => self.anchor_data_ttl,
             "dashboard" => self.dashboard_stats_ttl,
+            "stats_summary" => self.stats_summary_ttl,
             _ => 300,
         }
     }
@@ -54,9 +61,14 @@ impl CacheConfig {
     /// | `CACHE_CORRIDOR_METRICS_TTL`    | `corridor_metrics_ttl`  | 300 s   |
     /// | `CACHE_ANCHOR_DATA_TTL`         | `anchor_data_ttl`       | 600 s   |
     /// | `CACHE_DASHBOARD_STATS_TTL`     | `dashboard_stats_ttl`   | 60 s    |
+    /// | `CACHE_STATS_SUMMARY_TTL`       | `stats_summary_ttl`     | same as `dashboard_stats_ttl` unless set |
     #[must_use]
     pub fn from_env() -> Self {
         let default = Self::default();
+        let dashboard_stats_ttl = std::env::var("CACHE_DASHBOARD_STATS_TTL")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(default.dashboard_stats_ttl);
         Self {
             corridor_metrics_ttl: std::env::var("CACHE_CORRIDOR_METRICS_TTL")
                 .ok()
@@ -66,10 +78,15 @@ impl CacheConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(default.anchor_data_ttl),
-            dashboard_stats_ttl: std::env::var("CACHE_DASHBOARD_STATS_TTL")
+            dashboard_stats_ttl,
+            // Falls back to dashboard_stats_ttl (not the hardcoded default)
+            // so anyone who has already customized CACHE_DASHBOARD_STATS_TTL
+            // gets consistent behavior for stats/summary too, unless they
+            // explicitly opt into a different value.
+            stats_summary_ttl: std::env::var("CACHE_STATS_SUMMARY_TTL")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(default.dashboard_stats_ttl),
+                .unwrap_or(dashboard_stats_ttl),
         }
     }
 }
@@ -80,6 +97,7 @@ impl Default for CacheConfig {
             corridor_metrics_ttl: 300, // 5 minutes
             anchor_data_ttl: 600,      // 10 minutes
             dashboard_stats_ttl: 60,   // 1 minute
+            stats_summary_ttl: 60,     // 1 minute, matches dashboard_stats_ttl
         }
     }
 }
@@ -539,5 +557,32 @@ mod tests {
         assert_eq!(keys::corridor_pattern(), "corridor:*");
         assert_eq!(keys::dashboard_stats(), "dashboard:stats");
         assert_eq!(keys::anchor_pattern(), "anchor:*");
+        assert_eq!(keys::stats_summary(), "stats:summary");
+    }
+
+    #[test]
+    fn test_stats_summary_ttl_defaults_to_dashboard_ttl() {
+        std::env::remove_var("CACHE_STATS_SUMMARY_TTL");
+        std::env::set_var("CACHE_DASHBOARD_STATS_TTL", "45");
+
+        let config = CacheConfig::from_env();
+        assert_eq!(config.dashboard_stats_ttl, 45);
+        assert_eq!(config.stats_summary_ttl, 45);
+        assert_eq!(config.get_ttl("stats_summary"), 45);
+
+        std::env::remove_var("CACHE_DASHBOARD_STATS_TTL");
+    }
+
+    #[test]
+    fn test_stats_summary_ttl_can_be_overridden_independently() {
+        std::env::set_var("CACHE_DASHBOARD_STATS_TTL", "60");
+        std::env::set_var("CACHE_STATS_SUMMARY_TTL", "15");
+
+        let config = CacheConfig::from_env();
+        assert_eq!(config.dashboard_stats_ttl, 60);
+        assert_eq!(config.stats_summary_ttl, 15);
+
+        std::env::remove_var("CACHE_DASHBOARD_STATS_TTL");
+        std::env::remove_var("CACHE_STATS_SUMMARY_TTL");
     }
 }
