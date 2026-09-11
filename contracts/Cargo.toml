@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-  "stellar_insights",
+  "stellar_analysis",
   "analytics",
   "benches",
   "access-control",
@@ -24,7 +24,7 @@ soroban-sdk = "26.0.1"
 soroban-token-sdk = "26.0.0"
 
 # Release and bench profiles must stay in this workspace root only. Cargo ignores
-# `[profile.*]` in member crates (e.g. access-control, stellar_insights, governance)
+# `[profile.*]` in member crates (e.g. access-control, stellar_analysis, governance)
 # and prints: "profiles for non-root package will be ignored".
 
 [profile.release]

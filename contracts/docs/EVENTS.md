@@ -8,7 +8,7 @@ detail lives in `docs/events/<crate>.md`; this file is the map.
 
 | Crate | Emits events? | Consumed by |
 |---|---|---|
-| `stellar_insights` | Yes | Soroban Dashboard (snapshot feed, New Deployments panel, status panel) |
+| `stellar_analysis` | Yes | Soroban Dashboard (snapshot feed, New Deployments panel, status panel) |
 | `analytics` | Yes | Soroban Dashboard (snapshot feed, status panel, admin/governance audit trail) |
 | `access-control` | Yes | New Deployments panel, audit trail |
 | `escrow` | Yes | Top Contracts ranking, escrow activity feed, status panel |
@@ -19,9 +19,9 @@ detail lives in `docs/events/<crate>.md`; this file is the map.
 | `token-swap` | Storage-only today | Top Movers ranking (planned) |
 | `upgrade` | Storage-only today | New Deployments panel (planned) |
 
-## `stellar_insights`
+## `stellar_analysis`
 
-See [`docs/events/stellar_insights.md`](events/stellar_insights.md).
+See [`docs/events/stellar_analysis.md`](events/stellar_analysis.md).
 
 ## `analytics`
 

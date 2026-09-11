@@ -1,6 +1,6 @@
-# `stellar_insights` — Event Reference
+# `stellar_analysis` — Event Reference
 
-`stellar_insights/src/lib.rs` (via `stellar_insights/src/events.rs`) is one of the
+`stellar_analysis/src/lib.rs` (via `stellar_analysis/src/events.rs`) is one of the
 three crates in this workspace that emits real on-chain events today (the other
 two are `analytics` and `access-control`).
 

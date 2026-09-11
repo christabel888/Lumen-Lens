@@ -17,5 +17,5 @@ harness = false
 soroban-sdk = { workspace = true, features = ["testutils"] }
 analytics = { path = "../analytics" }
 governance = { path = "../governance" }
-stellar-insights = { path = "../stellar_insights" }
+stellar-analysis = { path = "../stellar_analysis" }
 criterion = { version = "0.8", features = ["html_reports"], default-features = false }

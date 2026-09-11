@@ -1,4 +1,4 @@
-//! Core `stellar_insights` contract: records the analytics-snapshot hash
+//! Core `stellar_analysis` contract: records the analytics-snapshot hash
 //! chain that other services verify off-chain data against.
 //!
 //! # Public API
@@ -10,7 +10,7 @@
 //! - `get_metadata` / `get_contract_info` — public metadata for tooling
 //!
 //! # Events
-//! See `docs/events/stellar_insights.md` for the full schema. In short:
+//! See `docs/events/stellar_analysis.md` for the full schema. In short:
 //! `ContractDeployedEvent` and an `init` event fire once on `initialize`;
 //! `SnapshotSubmitted` fires on every successful `submit_snapshot`; `paused`
 //! / `unpaused` / `AdminTransferredEvent` fire on their respective calls.
@@ -104,10 +104,10 @@ pub struct ContractInfo {
 }
 
 #[contract]
-pub struct StellarInsightsContract;
+pub struct StellarAnalysisContract;
 
 #[contractimpl]
-impl StellarInsightsContract {
+impl StellarAnalysisContract {
     /// Initialize the contract with an admin address
     ///
     /// # Arguments
@@ -139,7 +139,7 @@ impl StellarInsightsContract {
 
         // Fires exactly once per contract lifetime, immediately after the admin
         // is durably persisted. Consumed by the New Deployments panel to detect
-        // a fresh `stellar_insights` deployment.
+        // a fresh `stellar_analysis` deployment.
         emit_contract_initialized(&env, admin.clone());
         emit_contract_deployed(&env, admin, String::from_str(&env, VERSION));
 
@@ -541,14 +541,14 @@ impl StellarInsightsContract {
     /// Get public contract metadata
     pub fn get_metadata(env: Env) -> PublicMetadata {
         PublicMetadata {
-            name: String::from_str(&env, "Stellar Insights Core"),
+            name: String::from_str(&env, "Stellar Analysis Core"),
             version: String::from_str(&env, VERSION),
-            author: String::from_str(&env, "Stellar Insights Team"),
+            author: String::from_str(&env, "Stellar Analysis Team"),
             description: String::from_str(
                 &env,
                 "Core analytics snapshot contract for Stellar network",
             ),
-            repository: String::from_str(&env, "https://github.com/stellar-insights/contracts"),
+            repository: String::from_str(&env, "https://github.com/stellar-analysis/contracts"),
             license: String::from_str(&env, "MIT"),
         }
     }

@@ -1,8 +1,8 @@
 <div align="center">
 
-# 📜 Stellar Insights — Contracts
+# 📜 Stellar Analysis — Contracts
 
-**Soroban smart contracts powering the Stellar Insights protocol.**
+**Soroban smart contracts powering the Stellar Analysis protocol.**
 
 [![Soroban](https://img.shields.io/badge/Soroban-SDK_26-7D00FF?logo=stellar&logoColor=white)](https://soroban.stellar.org)
 [![Rust](https://img.shields.io/badge/Rust-2021-DE3F24?logo=rust&logoColor=white)](https://www.rust-lang.org)
@@ -15,7 +15,7 @@
 
 | Crate | Purpose |
 |---|---|
-| [`stellar_insights`](stellar_insights) | Core protocol contract — submits and stores analytics snapshots on-chain |
+| [`stellar_analysis`](stellar_analysis) | Core protocol contract — submits and stores analytics snapshots on-chain |
 | [`analytics`](analytics) | Batched snapshot ingestion with rate limiting, diffing, and pause/unpause controls |
 | [`access-control`](access-control) | Role- and permission-based access control shared across contracts |
 | [`escrow`](escrow) | Escrow service for holding and releasing funds between parties |
@@ -68,6 +68,6 @@ Workspace-wide Clippy lints deny `unwrap()`, `expect()`, and `panic!` in contrac
 
 ## Related repos
 
-- [backend](https://github.com/Stellar-Insightss/backend) — indexes and serves the on-chain data these contracts produce
-- [frontend](https://github.com/Stellar-Insightss/Stellar-inights/tree/main/frontend) — dashboard consuming this data
-- [mobile](https://github.com/Stellar-Insightss/mobile) — mobile client
+- [backend](https://github.com/Stellar-Analysis/backend) — indexes and serves the on-chain data these contracts produce
+- [frontend](https://github.com/Stellar-Analysis/frontend/tree/main/frontend) — dashboard consuming this data
+- [mobile](https://github.com/Stellar-Analysis/mobile) — mobile client

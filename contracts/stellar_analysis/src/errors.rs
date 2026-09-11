@@ -1,6 +1,6 @@
 use soroban_sdk::{contracterror, log, Env};
 
-/// Contract-specific errors for Stellar Insights Analytics Contract
+/// Contract-specific errors for Stellar Analysis Analytics Contract
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
