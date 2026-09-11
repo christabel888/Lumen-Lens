@@ -1,5 +1,5 @@
 use anyhow::Result;
-use stellar_insights_backend::rpc::{Asset, Payment, StellarRpcClient, Trade};
+use stellar_analysis_backend::rpc::{Asset, Payment, StellarRpcClient, Trade};
 
 #[tokio::main]
 async fn main() -> Result<()> {

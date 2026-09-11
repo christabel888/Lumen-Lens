@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
 
-COPY --from=builder /app/target/release/stellar-insights-backend /usr/local/bin/stellar-insights-backend
+COPY --from=builder /app/target/release/stellar-analysis-backend /usr/local/bin/stellar-analysis-backend
 COPY --from=builder /app/entrypoint.sh /app/entrypoint.sh
 COPY --from=builder /app/scripts/run_migrations.sh /app/scripts/run_migrations.sh
 COPY --from=builder /app/scripts/rollback_last_migration.sh /app/scripts/rollback_last_migration.sh
@@ -45,4 +45,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["/usr/local/bin/stellar-insights-backend"]
+CMD ["/usr/local/bin/stellar-analysis-backend"]

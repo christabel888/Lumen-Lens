@@ -10,9 +10,9 @@
 
 use sqlx::Row;
 use std::sync::Arc;
-use stellar_insights_backend::database::Database;
-use stellar_insights_backend::services::snapshot::SnapshotService;
-use stellar_insights_backend::snapshot::schema::AnalyticsSnapshot;
+use stellar_analysis_backend::database::Database;
+use stellar_analysis_backend::services::snapshot::SnapshotService;
+use stellar_analysis_backend::snapshot::schema::AnalyticsSnapshot;
 
 async fn setup_test_database() -> Arc<Database> {
     let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();

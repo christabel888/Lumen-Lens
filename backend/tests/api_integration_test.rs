@@ -15,17 +15,17 @@ use sqlx::SqlitePool;
 use std::sync::Arc;
 use tower::util::ServiceExt;
 
-use stellar_insights_backend::api::anchors::get_anchors;
-use stellar_insights_backend::cache::{CacheConfig, CacheManager};
-use stellar_insights_backend::database::Database;
-use stellar_insights_backend::handlers::{health_check, pool_metrics};
-use stellar_insights_backend::ingestion::DataIngestionService;
-use stellar_insights_backend::rpc::StellarRpcClient;
-use stellar_insights_backend::services::price_feed::{
+use stellar_analysis_backend::api::anchors::get_anchors;
+use stellar_analysis_backend::cache::{CacheConfig, CacheManager};
+use stellar_analysis_backend::database::Database;
+use stellar_analysis_backend::handlers::{health_check, pool_metrics};
+use stellar_analysis_backend::ingestion::DataIngestionService;
+use stellar_analysis_backend::rpc::StellarRpcClient;
+use stellar_analysis_backend::services::price_feed::{
     default_asset_mapping, PriceFeedClient, PriceFeedConfig,
 };
-use stellar_insights_backend::state::AppState;
-use stellar_insights_backend::websocket::WsState;
+use stellar_analysis_backend::state::AppState;
+use stellar_analysis_backend::websocket::WsState;
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 

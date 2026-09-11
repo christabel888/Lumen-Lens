@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚙️ Stellar Insights — Backend
+# ⚙️ Stellar Analysis — Backend
 
 **Rust analytics engine for real-time Stellar payment reliability.**
 
@@ -21,7 +21,7 @@ Ingests Stellar network activity (via RPC/Horizon), computes corridor and anchor
 - Rust (stable)
 - PostgreSQL (production) or SQLite (development, default)
 - Redis (caching, rate limiting)
-- [Vault](https://www.vaultproject.io) for secrets in production (see `docs/SECRETS_MANAGEMENT.md` in the [core repo](https://github.com/Stellar-Insightss/Stellar-inights))
+- [Vault](https://www.vaultproject.io) for secrets in production (see `docs/SECRETS_MANAGEMENT.md` in the [core repo](https://github.com/Stellar-Analysis/frontend))
 
 ## Setup
 
@@ -50,8 +50,8 @@ Ingests Stellar network activity (via RPC/Horizon), computes corridor and anchor
 ### Docker
 
 ```bash
-docker build -t stellar-insights-backend .
-docker run --env-file .env -p 8080:8080 stellar-insights-backend
+docker build -t stellar-analysis-backend .
+docker run --env-file .env -p 8080:8080 stellar-analysis-backend
 ```
 
 The container entrypoint (`entrypoint.sh`) runs pending migrations before starting the server.
@@ -90,6 +90,6 @@ Integration/load tests live in `tests/` and `load-tests/`.
 
 ## Related repos
 
-- [contracts](https://github.com/Stellar-Insightss/contracts) — Soroban contracts this backend indexes
-- [frontend](https://github.com/Stellar-Insightss/Stellar-inights/tree/main/frontend) — dashboard consuming this API
-- [mobile](https://github.com/Stellar-Insightss/mobile) — mobile client
+- [contracts](https://github.com/Stellar-Analysis/contracts) — Soroban contracts this backend indexes
+- [frontend](https://github.com/Stellar-Analysis/frontend/tree/main/frontend) — dashboard consuming this API
+- [mobile](https://github.com/Stellar-Analysis/mobile) — mobile client

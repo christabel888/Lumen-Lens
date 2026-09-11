@@ -25,7 +25,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-use stellar_insights_backend::{
+use stellar_analysis_backend::{
     api::v1::routes,
     backup::{BackupConfig, BackupManager},
     cache::{CacheConfig, CacheManager},
@@ -87,12 +87,12 @@ async fn main() -> anyhow::Result<()> {
         .context("Environment validation failed - please check your configuration")?;
 
     let _tracing_guard =
-        stellar_insights_backend::observability::tracing::init_tracing("stellar-insights-backend")?;
-    stellar_insights_backend::observability::metrics::init_metrics();
-    tracing::info!("Stellar Insights Backend - Initializing Server");
+        stellar_analysis_backend::observability::tracing::init_tracing("stellar-analysis-backend")?;
+    stellar_analysis_backend::observability::metrics::init_metrics();
+    tracing::info!("Stellar Analysis Backend - Initializing Server");
 
     let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "sqlite://stellar_insights.db".to_string());
+        .unwrap_or_else(|_| "sqlite://stellar_analysis.db".to_string());
     let pool = PoolConfig::from_env()
         .create_pool(&db_url)
         .await
@@ -149,11 +149,11 @@ async fn main() -> anyhow::Result<()> {
                         active,
                         size
                     );
-                    stellar_insights_backend::observability::metrics::record_pool_error(
+                    stellar_analysis_backend::observability::metrics::record_pool_error(
                         "near_exhaustion",
                     );
                 }
-                stellar_insights_backend::observability::metrics::set_pool_connections(
+                stellar_analysis_backend::observability::metrics::set_pool_connections(
                     active,
                     idle as usize,
                     size,
@@ -211,26 +211,26 @@ async fn main() -> anyhow::Result<()> {
     let _etag_caching_support = ETagCachingSupport::new(Default::default());
     let _batch_endpoints = BatchEndpoints::new(Default::default());
     let _response_compression = ResponseCompression::new(
-        stellar_insights_backend::models::response_compression::CompressionConfig::from_env(),
+        stellar_analysis_backend::models::response_compression::CompressionConfig::from_env(),
     );
     if let Err(e) = _response_compression.validate() {
         tracing::warn!("Response compression config invalid: {}", e);
     }
 
     let _push_notification_service = PushNotificationService::new(
-        stellar_insights_backend::models::push_notification_service::Config::default(),
+        stellar_analysis_backend::models::push_notification_service::Config::default(),
     );
     tracing::info!("Push notification service initialized");
 
     // Initialize SEP-10 for mobile (issue #1376)
     let _sep10_for_mobile = Sep10ForMobile::new(
-        stellar_insights_backend::models::sep10_for_mobile::Config::default(),
+        stellar_analysis_backend::models::sep10_for_mobile::Config::default(),
     );
     tracing::info!("SEP-10 for mobile initialized");
 
     // Initialize push notification registration (issue #1377)
     let _push_notification_registration = PushNotificationRegistration::new(
-        stellar_insights_backend::models::push_notification_registration::Config::default(),
+        stellar_analysis_backend::models::push_notification_registration::Config::default(),
     );
     tracing::info!("Push notification registration initialized");
 
@@ -276,7 +276,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Configure rate limits for expensive operations
-    use stellar_insights_backend::rate_limit::{ClientRateLimits, RateLimitConfig};
+    use stellar_analysis_backend::rate_limit::{ClientRateLimits, RateLimitConfig};
 
     // Export endpoints (CSV/Excel generation)
     rate_limiter
@@ -479,7 +479,7 @@ async fn main() -> anyhow::Result<()> {
     // WebSocket routes are excluded from the timeout layer — WS connections
     // are long-lived and must not be killed by the HTTP request timeout.
     let ws_routes = Router::new()
-        .route("/ws", stellar_insights_backend::websocket::ws_route())
+        .route("/ws", stellar_analysis_backend::websocket::ws_route())
         .with_state(Arc::clone(&ws_state))
         .layer(cors.clone());
 
@@ -498,7 +498,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Admin routes (backfill, etc.) — mounted at /admin
-    let admin_routes = stellar_insights_backend::api::backfill::routes(backfill_job);
+    let admin_routes = stellar_analysis_backend::api::backfill::routes(backfill_job);
 
     let graphql_api = Arc::new(GraphQLAPI::new(GraphQLAPIConfig::default(), 0));
     let graphql_routes = Router::new()
@@ -512,14 +512,14 @@ async fn main() -> anyhow::Result<()> {
         .merge(ws_routes)
         .route("/swagger-ui/*path", get(|| async { "Swagger UI documentation" }))
         .layer(middleware::from_fn(
-            stellar_insights_backend::payload_limit::payload_limit_middleware,
+            stellar_analysis_backend::payload_limit::payload_limit_middleware,
         ))
         .layer(middleware::from_fn(
-            stellar_insights_backend::api_deprecation_middleware::deprecation_middleware,
+            stellar_analysis_backend::api_deprecation_middleware::deprecation_middleware,
         ))
         .layer(middleware::from_fn_with_state(
             db.clone(),
-            stellar_insights_backend::api_analytics_middleware::api_analytics_middleware,
+            stellar_analysis_backend::api_analytics_middleware::api_analytics_middleware,
         ))
         // Concurrency limiter — rejects excess requests with 503 instead of letting them pile up
         .layer(middleware::from_fn_with_state(
@@ -606,7 +606,7 @@ async fn main() -> anyhow::Result<()> {
 
     log_shutdown_summary(start_shutdown);
     tracing::info!("Server shutdown complete");
-    stellar_insights_backend::observability::tracing::shutdown_tracing();
+    stellar_analysis_backend::observability::tracing::shutdown_tracing();
 
     Ok(())
 }

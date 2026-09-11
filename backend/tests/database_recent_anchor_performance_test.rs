@@ -1,8 +1,8 @@
 use chrono::Utc;
 use sqlx::SqlitePool;
 use std::sync::Arc;
-use stellar_insights_backend::database::Database;
-use stellar_insights_backend::models::PaymentRecord;
+use stellar_analysis_backend::database::Database;
+use stellar_analysis_backend::models::PaymentRecord;
 
 async fn setup_test_db() -> Arc<Database> {
     let pool = SqlitePool::connect(":memory:").await.unwrap();

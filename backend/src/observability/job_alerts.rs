@@ -384,7 +384,7 @@ impl AlertHandler for WebhookAlertHandler {
                 "timestamp": alert.timestamp,
                 "metadata": alert.metadata
             },
-            "service": "stellar-insights-backend",
+            "service": "stellar-analysis-backend",
             "timestamp": chrono::Utc::now().timestamp()
         });
 

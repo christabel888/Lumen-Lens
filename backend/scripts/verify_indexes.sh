@@ -4,7 +4,7 @@
 
 set -e
 
-DB_FILE="${DATABASE_URL:-sqlite:./stellar_insights.db}"
+DB_FILE="${DATABASE_URL:-sqlite:./stellar_analysis.db}"
 DB_PATH="${DB_FILE#sqlite:}"
 
 echo "=========================================="

@@ -1,4 +1,4 @@
-use stellar_insights_backend::logging::redaction::*;
+use stellar_analysis_backend::logging::redaction::*;
 
 #[cfg(test)]
 mod logging_redaction_tests {

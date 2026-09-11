@@ -1,6 +1,6 @@
 use sqlx::SqlitePool;
-use stellar_insights_backend::database::Database;
-use stellar_insights_backend::models::SnapshotRecord;
+use stellar_analysis_backend::database::Database;
+use stellar_analysis_backend::models::SnapshotRecord;
 
 #[tokio::test]
 async fn test_snapshot_storage_with_hash_and_epoch() {

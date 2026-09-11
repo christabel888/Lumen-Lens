@@ -1,8 +1,8 @@
 [package]
-name = "stellar-insights-backend"
+name = "stellar-analysis-backend"
 version = "0.1.0"
 edition = "2021"
-default-run = "stellar-insights-backend"
+default-run = "stellar-analysis-backend"
 
 # Clippy linting configuration
 [lints.clippy]
@@ -99,7 +99,7 @@ async-graphql-axum = "7.0"
 
 
 
-# [dependencies.stellar-insights-apm]
+# [dependencies.stellar-analysis-apm]
 # path = "apm"
 # optional = true
 

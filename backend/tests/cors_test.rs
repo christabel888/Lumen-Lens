@@ -390,7 +390,7 @@ async fn test_cors_request_without_origin_still_succeeds() {
 #[tokio::test]
 async fn test_cors_production_origin_receives_acao_header() {
     let cors =
-        cors_layer_from_origins("https://stellar-insights.com,https://www.stellar-insights.com");
+        cors_layer_from_origins("https://stellar-analysis.com,https://www.stellar-analysis.com");
     let app = build_router_with_cors(cors);
 
     let response = app
@@ -398,7 +398,7 @@ async fn test_cors_production_origin_receives_acao_header() {
             Request::builder()
                 .method(Method::GET)
                 .uri("/health")
-                .header(header::ORIGIN, "https://stellar-insights.com")
+                .header(header::ORIGIN, "https://stellar-analysis.com")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -412,7 +412,7 @@ async fn test_cors_production_origin_receives_acao_header() {
         .get("access-control-allow-origin")
         .expect("Production origin should receive ACAO header");
 
-    assert_eq!(acao, "https://stellar-insights.com");
+    assert_eq!(acao, "https://stellar-analysis.com");
 }
 
 // ---------------------------------------------------------------------------
