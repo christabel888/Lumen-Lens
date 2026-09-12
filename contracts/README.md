@@ -55,12 +55,31 @@ Benchmarks live in `benches/` and use the `[profile.bench]` profile (`opt-level 
 
 ## Deploy
 
+Requires Rust 1.84+ target `wasm32v1-none` (the `wasm32-unknown-unknown` target on
+Rust 1.82+ enables Wasm features the Soroban environment doesn't yet support):
+
 ```bash
+rustup target add wasm32v1-none
+cargo build --target wasm32v1-none --release -p <package_name>
+
 soroban contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/<contract_name>.wasm \
+  --wasm target/wasm32v1-none/release/<contract_name>.wasm \
   --source <account> \
   --network testnet
+
+soroban contract invoke --id <contract_id> --source <account> --network testnet \
+  -- initialize --admin <account_address>
 ```
+
+### Live on testnet
+
+| Contract | Contract ID | Deploy tx | Init tx |
+|---|---|---|---|
+| `stellar_analysis` | [`CDFFSZYJVQQJKI5O5WF63OQMPJCSY55BAZDIZGTD3XUFD764TSTYTDQK`](https://stellar.expert/explorer/testnet/contract/CDFFSZYJVQQJKI5O5WF63OQMPJCSY55BAZDIZGTD3XUFD764TSTYTDQK) | [tx](https://stellar.expert/explorer/testnet/tx/f949727ccc3001c245a88be119f3800c5117daddb348089ba15f158053f73676) | [tx](https://stellar.expert/explorer/testnet/tx/f8dfcdebdee8cd61545b0e5de22dcb63329f8abb70878f70205916e3aa64e822) |
+| `escrow` | [`CBWB5JIKJC7TJ2FBXB6AZEJ6HLOOBZCKWUN2RNTXTFFXQMRTLG2WDDNU`](https://stellar.expert/explorer/testnet/contract/CBWB5JIKJC7TJ2FBXB6AZEJ6HLOOBZCKWUN2RNTXTFFXQMRTLG2WDDNU) | [tx](https://stellar.expert/explorer/testnet/tx/d50332f9ce0aaea462129b05d3ce8566bb09e361caf28eb4b460688f1923d085) | [tx](https://stellar.expert/explorer/testnet/tx/7afcff0d5e8499560de044ebc24c93e3a2ef165a1f87a05d3cf393a460604885) |
+
+Both are initialized and live on Testnet (SDF network). The other 8 contracts in
+this workspace are not yet deployed anywhere.
 
 ## Linting
 
