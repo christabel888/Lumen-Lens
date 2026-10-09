@@ -1,0 +1,1 @@
+-- contract_events table and indexes are now managed in migration 022
