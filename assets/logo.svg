@@ -1,0 +1,56 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Lumen Lens logo">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#1e2542"/>
+      <stop offset="100%" stop-color="#0b0f1f"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <radialGradient id="core" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="55%" stop-color="#a5b4fc"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </radialGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <circle cx="256" cy="256" r="256" fill="url(#bg)"/>
+
+  <!-- distant stars -->
+  <g fill="#e2e8f0">
+    <circle cx="96" cy="120" r="2.2" opacity="0.8"/>
+    <circle cx="150" cy="88" r="1.4" opacity="0.6"/>
+    <circle cx="410" cy="110" r="2" opacity="0.7"/>
+    <circle cx="440" cy="170" r="1.3" opacity="0.5"/>
+    <circle cx="80" cy="360" r="1.6" opacity="0.6"/>
+    <circle cx="120" cy="420" r="2.1" opacity="0.7"/>
+    <circle cx="420" cy="400" r="1.5" opacity="0.5"/>
+    <circle cx="380" cy="440" r="2" opacity="0.65"/>
+  </g>
+
+  <!-- orbital corridor rings -->
+  <ellipse cx="256" cy="256" rx="168" ry="76" fill="none" stroke="url(#ring)" stroke-width="4" opacity="0.55" transform="rotate(-18 256 256)"/>
+  <ellipse cx="256" cy="256" rx="168" ry="76" fill="none" stroke="url(#ring)" stroke-width="4" opacity="0.35" transform="rotate(42 256 256)"/>
+
+  <!-- corridor node dots -->
+  <g>
+    <circle cx="404" cy="196" r="7" fill="#38bdf8"/>
+    <circle cx="112" cy="300" r="6" fill="#818cf8"/>
+    <circle cx="330" cy="356" r="5.5" fill="#a5b4fc"/>
+    <circle cx="168" cy="176" r="5" fill="#38bdf8"/>
+  </g>
+
+  <!-- central stellar core -->
+  <circle cx="256" cy="256" r="46" fill="url(#core)" filter="url(#glow)"/>
+
+  <!-- four-point star glint -->
+  <path d="M256 196 L266 246 L316 256 L266 266 L256 316 L246 266 L196 256 L246 246 Z" fill="#ffffff"/>
+</svg>

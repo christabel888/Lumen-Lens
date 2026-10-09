@@ -4340,7 +4340,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7beae5182595e9a8b683fa98c4317f956c9a2dec3b9716990d20023cc60c766"
 
 [[package]]
-name = "stellar-analysis-backend"
+name = "lumen-lens-backend"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",

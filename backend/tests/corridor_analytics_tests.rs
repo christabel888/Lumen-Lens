@@ -1,4 +1,4 @@
-use stellar_analysis_backend::services::analytics::{compute_corridor_metrics, CorridorPayment};
+use lumen_lens_backend::services::analytics::{compute_corridor_metrics, CorridorPayment};
 
 #[test]
 fn test_corridor_metrics_basic() {

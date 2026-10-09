@@ -7,13 +7,13 @@ use failsafe::{backoff, failure_policy, Config};
 use tokio::time;
 use uuid::Uuid;
 
-use stellar_analysis_backend::api::anchors::{get_anchor_metrics_with_fallback, AnchorMetrics};
-use stellar_analysis_backend::cache::{CacheConfig, CacheManager};
-use stellar_analysis_backend::rpc::circuit_breaker::{
+use lumen_lens_backend::api::anchors::{get_anchor_metrics_with_fallback, AnchorMetrics};
+use lumen_lens_backend::cache::{CacheConfig, CacheManager};
+use lumen_lens_backend::rpc::circuit_breaker::{
     rpc_circuit_breaker, CircuitBreaker, SharedCircuitBreaker,
 };
-use stellar_analysis_backend::rpc::error::{with_retry, RetryConfig, RpcError};
-use stellar_analysis_backend::rpc::stellar::StellarRpcClient;
+use lumen_lens_backend::rpc::error::{with_retry, RetryConfig, RpcError};
+use lumen_lens_backend::rpc::stellar::StellarRpcClient;
 
 fn test_circuit_breaker(failure_threshold: u32, timeout: Duration) -> SharedCircuitBreaker {
     let backoff = backoff::constant(timeout);

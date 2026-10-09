@@ -3,8 +3,8 @@
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
-    use stellar_analysis_backend::services::snapshot::SnapshotService;
-    use stellar_analysis_backend::snapshot::schema::AnalyticsSnapshot;
+    use lumen_lens_backend::services::snapshot::SnapshotService;
+    use lumen_lens_backend::snapshot::schema::AnalyticsSnapshot;
 
     #[test]
     fn test_deterministic_serialization_unit() {

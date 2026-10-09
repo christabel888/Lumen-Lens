@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
-    use stellar_analysis_backend::snapshot::{
+    use lumen_lens_backend::snapshot::{
         AnalyticsSnapshot, SnapshotAnchorMetrics, SnapshotCorridorMetrics, SnapshotGenerator,
         SCHEMA_VERSION,
     };

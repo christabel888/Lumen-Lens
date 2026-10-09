@@ -15,17 +15,17 @@ use sqlx::SqlitePool;
 use std::sync::Arc;
 use tower::util::ServiceExt;
 
-use stellar_analysis_backend::api::anchors::get_anchors;
-use stellar_analysis_backend::cache::{CacheConfig, CacheManager};
-use stellar_analysis_backend::database::Database;
-use stellar_analysis_backend::handlers::{health_check, pool_metrics};
-use stellar_analysis_backend::ingestion::DataIngestionService;
-use stellar_analysis_backend::rpc::StellarRpcClient;
-use stellar_analysis_backend::services::price_feed::{
+use lumen_lens_backend::api::anchors::get_anchors;
+use lumen_lens_backend::cache::{CacheConfig, CacheManager};
+use lumen_lens_backend::database::Database;
+use lumen_lens_backend::handlers::{health_check, pool_metrics};
+use lumen_lens_backend::ingestion::DataIngestionService;
+use lumen_lens_backend::rpc::StellarRpcClient;
+use lumen_lens_backend::services::price_feed::{
     default_asset_mapping, PriceFeedClient, PriceFeedConfig,
 };
-use stellar_analysis_backend::state::AppState;
-use stellar_analysis_backend::websocket::WsState;
+use lumen_lens_backend::state::AppState;
+use lumen_lens_backend::websocket::WsState;
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 

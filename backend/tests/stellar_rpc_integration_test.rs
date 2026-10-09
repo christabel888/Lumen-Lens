@@ -14,9 +14,9 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use stellar_analysis_backend::rpc::error::RpcError;
-use stellar_analysis_backend::rpc::mock_stellar::{MOCK_LATEST_LEDGER, MOCK_OLDEST_LEDGER};
-use stellar_analysis_backend::rpc::{Asset, StellarRpcClient};
+use lumen_lens_backend::rpc::error::RpcError;
+use lumen_lens_backend::rpc::mock_stellar::{MOCK_LATEST_LEDGER, MOCK_OLDEST_LEDGER};
+use lumen_lens_backend::rpc::{Asset, StellarRpcClient};
 
 fn load_contract_flow_fixture() -> Value {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../fixtures/contract-flow.json");

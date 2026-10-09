@@ -6,7 +6,7 @@
 
 set -e
 
-DB_PATH="${1:-.stellar_analysis.db}"
+DB_PATH="${1:-.lumen_lens.db}"
 RESET_FLAG="${2:-}"
 
 # Colors for output

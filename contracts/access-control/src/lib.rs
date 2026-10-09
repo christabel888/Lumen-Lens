@@ -393,16 +393,16 @@ impl AccessControlContract {
     /// Get public contract metadata
     pub fn get_metadata(env: Env) -> PublicMetadata {
         PublicMetadata {
-            name: soroban_sdk::String::from_str(&env, "Stellar Analysis Access Control"),
+            name: soroban_sdk::String::from_str(&env, "Lumen Lens Access Control"),
             version: soroban_sdk::String::from_str(&env, VERSION),
-            author: soroban_sdk::String::from_str(&env, "Stellar Analysis Team"),
+            author: soroban_sdk::String::from_str(&env, "Lumen Lens Team"),
             description: soroban_sdk::String::from_str(
                 &env,
-                "Role-based access control contract for Stellar Analysis",
+                "Role-based access control contract for Lumen Lens",
             ),
             repository: soroban_sdk::String::from_str(
                 &env,
-                "https://github.com/stellar-analysis/contracts",
+                "https://github.com/christabel888/Lumen-Lens",
             ),
             license: soroban_sdk::String::from_str(&env, "MIT"),
         }

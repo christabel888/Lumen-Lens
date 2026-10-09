@@ -1,4 +1,4 @@
-use stellar_analysis_backend::services::price_feed::{
+use lumen_lens_backend::services::price_feed::{
     default_asset_mapping, PriceFeedClient, PriceFeedConfig,
 };
 

@@ -7,8 +7,8 @@
 ///   - `compute_metrics_from_payments()`
 ///   - `compute_metrics_by_window()`
 use chrono::{Duration, Utc};
-use stellar_analysis_backend::models::corridor::{compute_median, Corridor, PaymentRecord};
-use stellar_analysis_backend::services::analytics::{
+use lumen_lens_backend::models::corridor::{compute_median, Corridor, PaymentRecord};
+use lumen_lens_backend::services::analytics::{
     compute_metrics_by_window, compute_metrics_from_payments,
 };
 use uuid::Uuid;

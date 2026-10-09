@@ -3,7 +3,7 @@ use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
 use analytics::{AnalyticsContract, AnalyticsContractClient};
 use governance::{GovernanceContract, GovernanceContractClient, VoteChoice};
-use stellar_analysis::{StellarAnalysisContract, StellarAnalysisContractClient};
+use lumen_lens::{LumenLensContract, LumenLensContractClient};
 
 // ============================================================================
 // Helpers
@@ -18,9 +18,9 @@ fn setup_analytics(env: &Env) -> (AnalyticsContractClient, Address) {
     (client, admin)
 }
 
-fn setup_stellar_analysis(env: &Env) -> (StellarAnalysisContractClient, Address) {
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(env, &contract_id);
+fn setup_lumen_lens(env: &Env) -> (LumenLensContractClient, Address) {
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(env, &contract_id);
     let admin = Address::generate(env);
     env.mock_all_auths();
     client.initialize(&admin);
@@ -147,17 +147,17 @@ fn bench_snapshot_history_growth(c: &mut Criterion) {
 }
 
 // ============================================================================
-// bench_stellar_analysis_submit
-// Submit benchmark against the stellar_analysis contract variant.
+// bench_lumen_lens_submit
+// Submit benchmark against the lumen_lens contract variant.
 // Result is unwrapped — a panic here indicates a contract regression.
 // ============================================================================
 
-fn bench_stellar_analysis_submit(c: &mut Criterion) {
+fn bench_lumen_lens_submit(c: &mut Criterion) {
     let env = Env::default();
-    let (client, admin) = setup_stellar_analysis(&env);
+    let (client, admin) = setup_lumen_lens(&env);
     let mut epoch = 1u64;
 
-    c.bench_function("stellar_analysis::submit_snapshot", |b| {
+    c.bench_function("lumen_lens::submit_snapshot", |b| {
         b.iter(|| {
             let hash = make_hash(&env, (epoch % 255) as u8);
             client
@@ -169,39 +169,39 @@ fn bench_stellar_analysis_submit(c: &mut Criterion) {
 }
 
 // ============================================================================
-// bench_stellar_analysis_get
-// Measures get_snapshot cost on the stellar_analysis contract.
+// bench_lumen_lens_get
+// Measures get_snapshot cost on the lumen_lens contract.
 // ============================================================================
 
-fn bench_stellar_analysis_get(c: &mut Criterion) {
+fn bench_lumen_lens_get(c: &mut Criterion) {
     let env = Env::default();
-    let (client, admin) = setup_stellar_analysis(&env);
+    let (client, admin) = setup_lumen_lens(&env);
 
     for epoch in 1u64..=100 {
         let hash = make_hash(&env, (epoch % 255) as u8);
         client.submit_snapshot(&epoch, &hash, &admin).unwrap();
     }
 
-    c.bench_function("stellar_analysis::get_snapshot", |b| {
+    c.bench_function("lumen_lens::get_snapshot", |b| {
         b.iter(|| client.get_snapshot(black_box(&50u64)).unwrap())
     });
 }
 
 // ============================================================================
-// bench_stellar_analysis_latest
-// Measures latest_snapshot cost on the stellar_analysis contract.
+// bench_lumen_lens_latest
+// Measures latest_snapshot cost on the lumen_lens contract.
 // ============================================================================
 
-fn bench_stellar_analysis_latest(c: &mut Criterion) {
+fn bench_lumen_lens_latest(c: &mut Criterion) {
     let env = Env::default();
-    let (client, admin) = setup_stellar_analysis(&env);
+    let (client, admin) = setup_lumen_lens(&env);
 
     for epoch in 1u64..=50 {
         let hash = make_hash(&env, (epoch % 255) as u8);
         client.submit_snapshot(&epoch, &hash, &admin).unwrap();
     }
 
-    c.bench_function("stellar_analysis::latest_snapshot", |b| {
+    c.bench_function("lumen_lens::latest_snapshot", |b| {
         b.iter(|| client.latest_snapshot().unwrap())
     });
 }
@@ -220,10 +220,10 @@ criterion_group!(
 );
 
 criterion_group!(
-    stellar_analysis_benches,
-    bench_stellar_analysis_submit,
-    bench_stellar_analysis_get,
-    bench_stellar_analysis_latest,
+    lumen_lens_benches,
+    bench_lumen_lens_submit,
+    bench_lumen_lens_get,
+    bench_lumen_lens_latest,
 );
 
 // ============================================================================
@@ -373,10 +373,10 @@ criterion_group!(
 );
 
 criterion_group!(
-    stellar_analysis_benches,
-    bench_stellar_analysis_submit,
-    bench_stellar_analysis_get,
-    bench_stellar_analysis_latest,
+    lumen_lens_benches,
+    bench_lumen_lens_submit,
+    bench_lumen_lens_get,
+    bench_lumen_lens_latest,
 );
 
 criterion_group!(
@@ -387,4 +387,4 @@ criterion_group!(
     bench_governance_get_proposal,
 );
 
-criterion_main!(analytics_benches, stellar_analysis_benches, governance_benches);
+criterion_main!(analytics_benches, lumen_lens_benches, governance_benches);

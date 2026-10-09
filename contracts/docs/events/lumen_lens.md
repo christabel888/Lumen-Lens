@@ -1,6 +1,6 @@
-# `stellar_analysis` — Event Reference
+# `lumen_lens` — Event Reference
 
-`stellar_analysis/src/lib.rs` (via `stellar_analysis/src/events.rs`) is one of the
+`lumen_lens/src/lib.rs` (via `lumen_lens/src/events.rs`) is one of the
 three crates in this workspace that emits real on-chain events today (the other
 two are `analytics` and `access-control`).
 

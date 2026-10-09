@@ -77,7 +77,7 @@ impl DigestScheduler {
         for recipient in &self.recipients {
             self.email_service.send_html(
                 recipient,
-                &format!("Stellar Analysis - {period} Performance Report"),
+                &format!("Lumen Lens - {period} Performance Report"),
                 &html,
             )?;
         }

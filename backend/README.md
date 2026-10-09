@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚙️ Stellar Analysis — Backend
+# ⚙️ Lumen Lens — Backend
 
 **Rust analytics engine for real-time Stellar payment reliability.**
 
@@ -21,7 +21,6 @@ Ingests Stellar network activity (via RPC/Horizon), computes corridor and anchor
 - Rust (stable)
 - PostgreSQL (production) or SQLite (development, default)
 - Redis (caching, rate limiting)
-- [Vault](https://www.vaultproject.io) for secrets in production (see `docs/SECRETS_MANAGEMENT.md` in the [core repo](https://github.com/Stellar-Analysis/frontend))
 
 ## Setup
 
@@ -50,8 +49,8 @@ Ingests Stellar network activity (via RPC/Horizon), computes corridor and anchor
 ### Docker
 
 ```bash
-docker build -t stellar-analysis-backend .
-docker run --env-file .env -p 8080:8080 stellar-analysis-backend
+docker build -t lumen-lens-backend .
+docker run --env-file .env -p 8080:8080 lumen-lens-backend
 ```
 
 The container entrypoint (`entrypoint.sh`) runs pending migrations before starting the server.
@@ -60,8 +59,7 @@ The container entrypoint (`entrypoint.sh`) runs pending migrations before starti
 
 | Path | Contents |
 |---|---|
-| `src/api/` | REST endpoint handlers (anchors, corridors, alerts, auth, achievements, ...) |
-| `src/graphql/` | GraphQL schema and resolvers |
+| `src/api/` | REST endpoint handlers (anchors, corridors, wallets, price feed, ...) |
 | `src/rpc/` | Stellar RPC/Horizon client, rate limiting, circuit breaker |
 | `src/ingestion/` | Network data ingestion pipelines |
 | `src/auth/`, `auth_middleware.rs` | SEP-10 Stellar auth and JWT session handling |
@@ -69,8 +67,7 @@ The container entrypoint (`entrypoint.sh`) runs pending migrations before starti
 | `src/jobs/` | Background jobs (corridor/anchor refresh, price feed, cache cleanup) |
 | `src/observability/` | OpenTelemetry tracing, health checks |
 | `src/logging/` | Structured (JSON) logging, ELK/Logstash forwarding |
-| `src/webhooks/`, `src/telegram/` | Outbound alert delivery |
-| `src/vault/` | Vault-backed secrets integration |
+| `src/webhooks/` | Outbound alert delivery |
 | `migrations/` | SQL migrations (32 to date) |
 | `scripts/` | Migration, backup, and smoke-test scripts |
 
@@ -84,12 +81,5 @@ Integration/load tests live in `tests/` and `load-tests/`.
 
 ## Observability
 
-- **Logs** — set `LOGSTASH_ENABLED=true` to forward structured logs to an ELK stack (see `docker-compose.elk.yml` in the core repo)
+- **Logs** — set `LOGSTASH_ENABLED=true` to forward structured logs to an ELK stack 
 - **Traces** — set `OTEL_ENABLED=true` to export traces to Jaeger (`docker-compose.jaeger.yml`)
-- **API docs** — OpenAPI schema generated via `utoipa` (`src/openapi.rs`)
-
-## Related repos
-
-- [contracts](https://github.com/Stellar-Analysis/contracts) — Soroban contracts this backend indexes
-- [frontend](https://github.com/Stellar-Analysis/frontend/tree/main/frontend) — dashboard consuming this API
-- [mobile](https://github.com/Stellar-Analysis/mobile) — mobile client

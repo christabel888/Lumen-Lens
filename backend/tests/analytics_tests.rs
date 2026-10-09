@@ -1,4 +1,4 @@
-use stellar_analysis_backend::{
+use lumen_lens_backend::{
     analytics::compute_anchor_metrics, analytics::count_assets_per_anchor, models::AnchorStatus,
 };
 

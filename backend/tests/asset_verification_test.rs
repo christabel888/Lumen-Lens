@@ -1,9 +1,9 @@
 use anyhow::Result;
 use sqlx::SqlitePool;
-use stellar_analysis_backend::models::asset_verification::{
+use lumen_lens_backend::models::asset_verification::{
     StellarTomlData, VerificationResult, VerificationStatus,
 };
-use stellar_analysis_backend::services::asset_verifier::AssetVerifier;
+use lumen_lens_backend::services::asset_verifier::AssetVerifier;
 
 /// Helper function to create a test database
 async fn create_test_db() -> Result<SqlitePool> {

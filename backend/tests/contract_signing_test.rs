@@ -5,7 +5,7 @@ Tests the full decode-sign-encode lifecycle with mocked Soroban RPC responses.
 
 #[cfg(test)]
 mod contract_signing_tests {
-    use stellar_analysis_backend::services::contract::{ContractConfig, ContractService};
+    use lumen_lens_backend::services::contract::{ContractConfig, ContractService};
     use serde_json::json;
 
     /// Test configuration for Soroban testnet

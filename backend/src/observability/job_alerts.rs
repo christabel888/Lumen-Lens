@@ -384,7 +384,7 @@ impl AlertHandler for WebhookAlertHandler {
                 "timestamp": alert.timestamp,
                 "metadata": alert.metadata
             },
-            "service": "stellar-analysis-backend",
+            "service": "lumen-lens-backend",
             "timestamp": chrono::Utc::now().timestamp()
         });
 

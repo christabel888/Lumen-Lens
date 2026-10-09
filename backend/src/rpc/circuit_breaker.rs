@@ -43,7 +43,7 @@ pub fn rpc_circuit_breaker() -> SharedCircuitBreaker {
 /// # Example
 ///
 /// ```rust,no_run
-/// use stellar_analysis_backend::rpc::circuit_breaker::{CircuitBreakerConfig, rpc_circuit_breaker};
+/// use lumen_lens_backend::rpc::circuit_breaker::{CircuitBreakerConfig, rpc_circuit_breaker};
 /// use std::time::Duration;
 ///
 /// let config = CircuitBreakerConfig {

@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
-use stellar_analysis_backend::rpc::StellarRpcClient;
-use stellar_analysis_backend::services::account_merge_detector::AccountMergeDetector;
+use lumen_lens_backend::rpc::StellarRpcClient;
+use lumen_lens_backend::services::account_merge_detector::AccountMergeDetector;
 use tower::util::ServiceExt;
 
 async fn setup_account_merge_pool() -> SqlitePool {
@@ -128,7 +128,7 @@ async fn test_account_merge_routes() {
 
     detector.process_ledger_operations(202).await.unwrap();
 
-    let app = stellar_analysis_backend::api::account_merges::routes(detector);
+    let app = lumen_lens_backend::api::account_merges::routes(detector);
 
     let stats_res = app
         .clone()

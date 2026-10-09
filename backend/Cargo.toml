@@ -1,8 +1,8 @@
 [package]
-name = "stellar-analysis-backend"
+name = "lumen-lens-backend"
 version = "0.1.0"
 edition = "2021"
-default-run = "stellar-analysis-backend"
+default-run = "lumen-lens-backend"
 
 # Clippy linting configuration
 [lints.clippy]
@@ -99,7 +99,7 @@ async-graphql-axum = "7.0"
 
 
 
-# [dependencies.stellar-analysis-apm]
+# [dependencies.lumen-lens-apm]
 # path = "apm"
 # optional = true
 

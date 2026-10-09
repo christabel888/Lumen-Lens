@@ -2065,14 +2065,14 @@ impl AnalyticsContract {
 
     pub fn get_metadata(env: Env) -> PublicMetadata {
         PublicMetadata {
-            name: String::from_str(&env, "Stellar Analysis Analytics"),
+            name: String::from_str(&env, "Lumen Lens Analytics"),
             version: String::from_str(&env, VERSION),
-            author: String::from_str(&env, "Stellar Analysis Team"),
+            author: String::from_str(&env, "Lumen Lens Team"),
             description: String::from_str(
                 &env,
                 "Advanced analytics and data aggregation contract for Stellar network",
             ),
-            repository: String::from_str(&env, "https://github.com/stellar-analysis/contracts"),
+            repository: String::from_str(&env, "https://github.com/christabel888/Lumen-Lens"),
             license: String::from_str(&env, "MIT"),
         }
     }

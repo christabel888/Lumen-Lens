@@ -13,8 +13,8 @@
 //! # Quick Start
 //!
 //! ```rust,no_run
-//! use stellar_analysis_backend::services::event_indexer::{EventIndexer, EventQuery, EventOrderBy};
-//! use stellar_analysis_backend::database::Database;
+//! use lumen_lens_backend::services::event_indexer::{EventIndexer, EventQuery, EventOrderBy};
+//! use lumen_lens_backend::database::Database;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {

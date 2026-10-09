@@ -1,16 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
-  "stellar_analysis",
+  "lumen_lens",
   "analytics",
   "benches",
   "access-control",
   "governance",
-  "escrow",
-  "governance-voting",
-  "multi-sig-wallet",
-  "time-locked-transactions",
-  "token-swap",
 ]
 
 # Clippy linting configuration for all contracts
@@ -24,7 +19,7 @@ soroban-sdk = "26.0.1"
 soroban-token-sdk = "26.0.0"
 
 # Release and bench profiles must stay in this workspace root only. Cargo ignores
-# `[profile.*]` in member crates (e.g. access-control, stellar_analysis, governance)
+# `[profile.*]` in member crates (e.g. access-control, lumen_lens, governance)
 # and prints: "profiles for non-root package will be ignored".
 
 [profile.release]

@@ -453,10 +453,10 @@ mod tests {
 
     #[test]
     fn test_auto_redact_strips_emails_from_error_context() {
-        let log_line = "User not found: admin@stellar-analysis.com (404)";
+        let log_line = "User not found: admin@lumen-lens.com (404)";
         let redacted = auto_redact_string(log_line);
         assert!(
-            !redacted.contains("admin@stellar-analysis.com"),
+            !redacted.contains("admin@lumen-lens.com"),
             "Email address must not appear in redacted log"
         );
         assert!(

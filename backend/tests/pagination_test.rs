@@ -1,4 +1,4 @@
-use stellar_analysis_backend::rpc::StellarRpcClient;
+use lumen_lens_backend::rpc::StellarRpcClient;
 
 #[tokio::test]
 async fn test_fetch_all_payments_mock() {

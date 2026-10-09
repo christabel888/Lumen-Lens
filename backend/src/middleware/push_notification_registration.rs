@@ -2,7 +2,7 @@
 //!
 //! This module provides a [`PushNotificationRegistration`] service that handles
 //! registering and deregistering mobile/web devices for push notifications on
-//! the Stellar Analysis platform.
+//! the Lumen Lens platform.
 //!
 //! Key capabilities:
 //! - Network-context awareness (testnet / mainnet routing)

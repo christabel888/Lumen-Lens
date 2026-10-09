@@ -40,8 +40,8 @@ fn count_contract_events_with_topic0(env: &Env, topic0: Symbol) -> usize {
 #[test]
 fn test_initialization() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
 
@@ -55,8 +55,8 @@ fn test_initialization() {
 #[should_panic(expected = "Error(Contract, #1)")]
 fn test_cannot_reinitialize() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin1 = Address::generate(&env);
     let admin2 = Address::generate(&env);
@@ -70,8 +70,8 @@ fn test_successful_snapshot_submission() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -90,8 +90,8 @@ fn test_retrieve_snapshot_by_epoch() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -110,8 +110,8 @@ fn test_latest_snapshot_retrieval() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -137,8 +137,8 @@ fn test_unauthorized_caller_fails() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     let unauthorized = Address::generate(&env);
@@ -160,8 +160,8 @@ fn test_duplicate_epoch_fails() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -184,8 +184,8 @@ fn test_invalid_epoch_zero_fails() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -203,8 +203,8 @@ fn test_older_epoch_rejected() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -227,8 +227,8 @@ fn test_older_epoch_rejected() {
 #[test]
 fn test_initialize_emits_deployed_event() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -265,8 +265,8 @@ fn test_snapshot_submitted_event() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -313,8 +313,8 @@ fn test_event_payload_matches_stored_data() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -352,8 +352,8 @@ fn test_event_emitted_on_each_valid_submission() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -377,8 +377,8 @@ fn test_event_emitted_on_each_valid_submission() {
 #[test]
 fn test_get_nonexistent_snapshot_fails() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -391,8 +391,8 @@ fn test_get_nonexistent_snapshot_fails() {
 #[test]
 fn test_latest_snapshot_empty_fails() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -407,8 +407,8 @@ fn test_multiple_snapshots_different_epochs() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -437,8 +437,8 @@ fn test_non_sequential_epochs() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -462,8 +462,8 @@ fn test_admin_not_set_error() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     // Try to submit without initializing
     let caller = Address::generate(&env);
@@ -573,8 +573,8 @@ fn test_error_messages_unauthorized() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     let attacker = Address::generate(&env);
@@ -594,8 +594,8 @@ fn test_error_messages_invalid_epoch_zero() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -614,8 +614,8 @@ fn test_error_messages_duplicate_epoch() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -633,8 +633,8 @@ fn test_error_messages_duplicate_epoch() {
 #[test]
 fn test_error_messages_snapshot_not_found() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
@@ -653,8 +653,8 @@ fn test_error_messages_admin_not_set() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let caller = Address::generate(&env);
     let result = client.try_submit_snapshot(&1, &create_test_hash(&env, 1), &caller);
@@ -682,8 +682,8 @@ fn test_error_log_context_returns_self() {
 fn test_set_admin_success_updates_admin() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     let new_admin = Address::generate(&env);
@@ -698,8 +698,8 @@ fn test_set_admin_success_updates_admin() {
 fn test_set_admin_emits_admin_transferred_event() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     let new_admin = Address::generate(&env);
@@ -747,8 +747,8 @@ fn test_set_admin_emits_admin_transferred_event() {
 fn test_set_admin_unauthorized_caller_returns_error() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     let attacker = Address::generate(&env);
@@ -765,8 +765,8 @@ fn test_set_admin_unauthorized_caller_returns_error() {
 fn test_set_admin_unauthorized_emits_no_event() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, StellarAnalysisContract);
-    let client = StellarAnalysisContractClient::new(&env, &contract_id);
+    let contract_id = env.register_contract(None, LumenLensContract);
+    let client = LumenLensContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
     let attacker = Address::generate(&env);

@@ -1,6 +1,6 @@
 use sqlx::SqlitePool;
-use stellar_analysis_backend::models::asset_verification::VerificationStatus;
-use stellar_analysis_backend::services::asset_verifier::AssetVerifier;
+use lumen_lens_backend::models::asset_verification::VerificationStatus;
+use lumen_lens_backend::services::asset_verifier::AssetVerifier;
 
 async fn setup_test_db() -> SqlitePool {
     let pool = SqlitePool::connect(":memory:").await.unwrap();

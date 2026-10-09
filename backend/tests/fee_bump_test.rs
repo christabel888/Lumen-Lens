@@ -1,7 +1,7 @@
 use chrono::Utc;
 use sqlx::SqlitePool;
-use stellar_analysis_backend::rpc::{FeeBumpTransactionInfo, HorizonTransaction, InnerTransaction};
-use stellar_analysis_backend::services::fee_bump_tracker::FeeBumpTrackerService;
+use lumen_lens_backend::rpc::{FeeBumpTransactionInfo, HorizonTransaction, InnerTransaction};
+use lumen_lens_backend::services::fee_bump_tracker::FeeBumpTrackerService;
 
 async fn setup_fee_bump_pool() -> SqlitePool {
     let pool = SqlitePool::connect(":memory:").await.unwrap();

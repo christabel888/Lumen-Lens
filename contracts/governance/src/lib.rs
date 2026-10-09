@@ -789,14 +789,14 @@ impl GovernanceContract {
     /// Get public contract metadata
     pub fn get_metadata(env: Env) -> PublicMetadata {
         PublicMetadata {
-            name: String::from_str(&env, "Stellar Analysis Governance"),
+            name: String::from_str(&env, "Lumen Lens Governance"),
             version: String::from_str(&env, VERSION),
-            author: String::from_str(&env, "Stellar Analysis Team"),
+            author: String::from_str(&env, "Lumen Lens Team"),
             description: String::from_str(
                 &env,
-                "Decentralized governance and voting contract for Stellar Analysis",
+                "Decentralized governance and voting contract for Lumen Lens",
             ),
-            repository: String::from_str(&env, "https://github.com/stellar-analysis/contracts"),
+            repository: String::from_str(&env, "https://github.com/christabel888/Lumen-Lens"),
             license: String::from_str(&env, "MIT"),
         }
     }

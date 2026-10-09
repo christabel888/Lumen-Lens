@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_sqlite_url() {
-        let url = "sqlite:./stellar_analysis.db";
+        let url = "sqlite:./lumen_lens.db";
         assert_eq!(sanitize_database_url(url), url);
     }
 

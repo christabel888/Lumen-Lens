@@ -1,5 +1,5 @@
 [package]
-name = "stellar-analysis"
+name = "lumen-lens"
 version = "0.1.1"
 edition = "2021"
 publish = false
