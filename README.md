@@ -10,7 +10,6 @@ Cross-border payments move fast on Stellar — corridor health, anchor uptime, s
 
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-7D00FF?logo=stellar&logoColor=white)](https://stellar.org)
 [![Rust](https://img.shields.io/badge/Backend-Rust-DE3F24?logo=rust&logoColor=white)](backend)
-[![Next.js](https://img.shields.io/badge/Frontend-Next.js-000000?logo=nextdotjs&logoColor=white)](frontend)
 [![Soroban](https://img.shields.io/badge/Contracts-Soroban_SDK_26-7D00FF?logo=stellar&logoColor=white)](contracts)
 
 </div>
@@ -19,13 +18,12 @@ Cross-border payments move fast on Stellar — corridor health, anchor uptime, s
 
 ## 🛰️ What we're building
 
-A lean, production-grade stack that turns raw Stellar network activity into payment reliability metrics that actually mean something — corridor success rates, anchor uptime, settlement latency — served up through a live dashboard backed by a Rust analytics engine and an on-chain analytics layer. No guesswork, just ledgers, decoded.
+A lean, production-grade stack that turns raw Stellar network activity into payment reliability metrics that actually mean something — corridor success rates, anchor uptime, settlement latency — served up by a Rust analytics engine over REST and WebSockets, with an on-chain analytics layer on Soroban. No guesswork, just ledgers, decoded.
 
 ## 📦 What's in this repo
 
 | Path | What's in it |
 |---|---|
-| 🧭 **[`frontend/`](frontend)** | Next.js dashboard, plus infra (k8s, Terraform, ELK), docs, and shared tooling |
 | ⚙️ **[`backend/`](backend)** | Rust/Axum analytics engine — ingestion, alerting, caching, REST + WebSocket API |
 | 📜 **[`contracts/`](contracts)** | Soroban smart contracts — analytics snapshots, access control, governance |
 | 🖼️ **[`assets/`](assets)** | Logo and shared images |
@@ -33,7 +31,6 @@ A lean, production-grade stack that turns raw Stellar network activity into paym
 ## 🧰 Stack at a glance
 
 - ⚙️ **Backend** — Rust, Axum, PostgreSQL/SQLite, Redis
-- 🖥️ **Frontend** — Next.js 16, React 19, Tailwind 4, Recharts
 - 📜 **Contracts** — Soroban (Rust), deployed on Stellar
 - 🔭 **Observability** — OpenTelemetry, Jaeger, ELK
 
@@ -50,14 +47,6 @@ cd Lumen-Lens
 cd backend
 cp .env.example .env
 cargo run
-```
-
-**Frontend**
-
-```bash
-cd frontend
-pnpm install
-pnpm dev        # http://localhost:3000
 ```
 
 **Contracts**
